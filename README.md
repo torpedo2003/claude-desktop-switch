@@ -14,6 +14,8 @@ Your Claude Desktop accounts and remaining quota, together in your Mac’s menu 
 
 **English** · [简体中文](README.zh-CN.md) · [繁體中文](README.zh-TW.md) · [日本語](README.ja.md)
 
+[Install](#install) · [Getting started](#getting-started) · [What happens when you switch](#what-happens-when-you-switch) · [Move to another Mac](#move-to-another-mac) · [FAQ](#faq)
+
 <br>
 
 <picture>
@@ -35,6 +37,7 @@ Using personal and work accounts should not mean signing in over and over or fin
 - **Take your work with you.** Bring Code conversations, subtasks and attachments to another account, with saved panes and file views kept together.
 - **Add an account, keep the others.** Sign in to another account without signing out of the ones you already saved.
 - **Understand your usage.** Look back at your local Code activity, daily usage and most-used models.
+- **Move to another Mac.** Export your accounts, saved logins and settings to a password-protected file and import them on a new Mac.
 
 ## Screenshots
 
@@ -116,6 +119,36 @@ You can enable switch recommendations and operation-result notifications during 
 
 Handy shortcuts in the main window: `⌘1` `⌘2` `⌘3` switch pages, `⌘K` searches accounts and sessions, `⌘R` refreshes local accounts and conversations. Use each account’s refresh button for quota.
 
+## What happens when you switch
+
+1. Claude Switch checks the saved login of the account you picked.
+2. Claude quits normally and the current account is saved. Running work is interrupted, so finish it first. If Claude does not quit, the switch stops.
+3. The selected account's login is put in place and the Code conversations you chose move to it.
+4. Claude reopens, signed in to the selected account.
+
+If a step fails, Claude's original files are restored and Claude reopens as it was.
+
+| Changes | Stays the same |
+| --- | --- |
+| The Claude Desktop login | The Claude Code CLI login |
+| Which account the selected Code conversations belong to | Your projects and their files |
+| | MCP configuration, skills, plugins and hooks |
+| | Cowork conversations, which cannot be moved between accounts |
+
+## Move to another Mac
+
+You need Claude Switch 0.2.8 or later on both Macs. On the new Mac, install Claude Desktop and open it once before opening Claude Switch.
+
+1. On the old Mac, open **Settings → Move to another Mac → Export accounts…**, set a password of at least 12 characters and save the file.
+2. Copy the file to the new Mac, for example with AirDrop or a USB drive.
+3. On the new Mac, open **Settings → Move to another Mac → Import accounts…**, enter the same password and choose the file.
+
+The file holds your accounts, saved logins, quota history, follow rules and preferences. Code conversations are not included; they live in `~/.claude` and Claude Desktop's own folders.
+
+- Anyone with the file and its password can sign in to those accounts, so delete the file when you are done. A forgotten password cannot be recovered.
+- A login already saved on the new Mac is kept. An account that cannot be converted is skipped and counted in the result.
+- Both Macs now hold the same login, so a token refresh on one may sign the other out. If Claude does not accept an imported login, sign in to that account once on the new Mac and it is saved again.
+
 ## Privacy and security
 
 - Saved logins are encrypted on your Mac and protected by your login Keychain.
@@ -148,7 +181,18 @@ No. Claude Switch switches Claude Desktop. The Claude Code command-line tool kee
 <details>
 <summary><b>Can I move my saved accounts to another Mac?</b></summary>
 
-Sign in to each account on the new Mac to save it again. A full transfer with macOS Migration Assistant may also preserve your saved logins.
+Yes. See [Move to another Mac](#move-to-another-mac). Copying the data folder by hand does not work, because the keys that unlock it stay on the old Mac.
+</details>
+
+<details>
+<summary><b>Setup stops at "The saved-login encryption key is missing"</b></summary>
+
+The data folder holds saved logins, but this Mac's Keychain does not have the key that unlocks them. This usually means the folder was copied from another Mac. **Allow access** cannot fix it, and the data cannot be read on this Mac.
+
+1. Quit Claude Switch.
+2. In Finder, rename `~/Library/Application Support/Claude Desktop Switch` so you keep a copy, for example to `Claude Desktop Switch old`.
+3. Open Claude Switch and choose **Allow access**.
+4. Bring your accounts over with [Move to another Mac](#move-to-another-mac). You can delete the renamed folder afterward.
 </details>
 
 <details>
