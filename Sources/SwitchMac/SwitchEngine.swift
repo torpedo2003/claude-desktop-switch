@@ -517,6 +517,28 @@ public actor SwitchEngine: SwitchService {
         prune(now: Date())
     }
 
+    public static let minimumTransferPassphraseLength = 12
+    /// Writes the library and every readable saved login to a password-protected file. Claude is not touched.
+    public func exportData(library: LibraryState, passphrase: String, to destination: URL) async throws -> Int {
+        guard !busy else { throw SwitchError.busy }
+        busy = true; defer { busy = false }
+        return try await LoginTransfer.export(library: library, vault: vault, safeStoragePassword: safeStoragePassword(),
+                                              passphrase: passphrase, to: destination)
+    }
+    /// Re-encrypts the file's logins for this Mac and adds them to the vault. Claude is not touched.
+    public func importData(from source: URL, passphrase: String) async throws -> TransferImport {
+        guard !busy else { throw SwitchError.busy }
+        busy = true; defer { busy = false }
+        let operationLock = try OperationLock(root: environment.root)
+        defer { withExtendedLifetime(operationLock) {} }
+        guard try pendingRecovery().isEmpty else { throw SwitchError.blocked(L10n.tr("An unfinished operation needs recovery in Settings first.")) }
+        return try await LoginTransfer.importFile(source, passphrase: passphrase, vault: vault, safeStoragePassword: safeStoragePassword())
+    }
+    private func safeStoragePassword() throws -> Data {
+        do { return try DesktopTokenReader.authorize(allowPrompt: true) }
+        catch { throw SwitchError.blocked(L10n.tr("Open Claude once on this Mac and allow access, then try again.")) }
+    }
+
     /// A login whose token caches are provably empty cannot sign in; it must not replace a saved one.
     func isTokenlessOverSaved(_ snapshot: LoginSnapshot) async -> Bool {
         guard IdentitySchema.tokenCachesKnownEmpty(.object(snapshot.auth)) else { return false }

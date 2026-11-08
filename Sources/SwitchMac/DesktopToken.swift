@@ -4,6 +4,46 @@ import CommonCrypto
 import SwitchCore
 import SwitchStorage
 
+/// Chromium's macOS scheme for Claude's stored secrets: `v10` + AES-128-CBC under a key derived from the Safe Storage password.
+struct SafeStorageCipher {
+    struct Failure: Error {}
+    private static let prefix = Data("v10".utf8)
+    private var key = Data(count: kCCKeySizeAES128)
+    init(password: Data) throws {
+        let salt = Data("saltysalt".utf8), length = key.count
+        let status = key.withUnsafeMutableBytes { output in
+            password.withUnsafeBytes { secret in salt.withUnsafeBytes { salt in
+                CCKeyDerivationPBKDF(CCPBKDFAlgorithm(kCCPBKDF2), secret.bindMemory(to: Int8.self).baseAddress,
+                    password.count, salt.bindMemory(to: UInt8.self).baseAddress, salt.count,
+                    CCPseudoRandomAlgorithm(kCCPRFHmacAlgSHA1), 1003,
+                    output.bindMemory(to: UInt8.self).baseAddress, length)
+            } }
+        }
+        guard status == kCCSuccess else { throw Failure() }
+    }
+    mutating func wipe() { key.resetBytes(in: 0..<key.count) }
+    func decrypt(_ encrypted: Data) throws -> Data {
+        guard encrypted.prefix(3) == Self.prefix else { throw Failure() }
+        return try crypt(CCOperation(kCCDecrypt), Data(encrypted.dropFirst(3)))
+    }
+    func encrypt(_ plain: Data) throws -> Data { Self.prefix + (try crypt(CCOperation(kCCEncrypt), plain)) }
+    private func crypt(_ operation: CCOperation, _ input: Data) throws -> Data {
+        let iv = Data(repeating: 0x20, count: 16)
+        var output = Data(count: input.count + 16), written = 0
+        let capacity = output.count
+        let status = output.withUnsafeMutableBytes { out in input.withUnsafeBytes { input in
+            key.withUnsafeBytes { key in iv.withUnsafeBytes { iv in
+                CCCrypt(operation, CCAlgorithm(kCCAlgorithmAES), CCOptions(kCCOptionPKCS7Padding),
+                        key.baseAddress, key.count, iv.baseAddress, input.baseAddress, input.count,
+                        out.baseAddress, capacity, &written)
+            } }
+        } }
+        guard status == kCCSuccess else { throw Failure() }
+        output.count = written
+        return output
+    }
+}
+
 /// Only the selected access token is retained; this reader never uses a refresh grant.
 struct DesktopAccessToken {
     let value: String
@@ -70,31 +110,13 @@ enum DesktopTokenReader {
         }
         var password = try password()
         defer { password.resetBytes(in: 0..<password.count) }
-        let salt = Data("saltysalt".utf8)
-        var key = Data(count: kCCKeySizeAES128)
-        let derive = key.withUnsafeMutableBytes { output in
-            password.withUnsafeBytes { secret in salt.withUnsafeBytes { salt in
-                CCKeyDerivationPBKDF(CCPBKDFAlgorithm(kCCPBKDF2), secret.bindMemory(to: Int8.self).baseAddress,
-                    password.count, salt.bindMemory(to: UInt8.self).baseAddress, salt.count,
-                    CCPseudoRandomAlgorithm(kCCPRFHmacAlgSHA1), 1003,
-                    output.bindMemory(to: UInt8.self).baseAddress, kCCKeySizeAES128)
-            } }
-        }
-        guard derive == kCCSuccess else { throw SwitchError.blocked(L10n.tr("Could not read this account's login. Please check the login in Claude.")) }
-        defer { key.resetBytes(in: 0..<key.count) }
-        let cipher = encrypted.dropFirst(3), iv = Data(repeating: 0x20, count: 16)
-        var plain = Data(count: cipher.count + 16), written = 0
+        var cipher: SafeStorageCipher
+        do { cipher = try SafeStorageCipher(password: password) }
+        catch { throw SwitchError.blocked(L10n.tr("Could not read this account's login. Please check the login in Claude.")) }
+        defer { cipher.wipe() }
+        var plain: Data
+        do { plain = try cipher.decrypt(encrypted) } catch { throw DecryptionFailure() }
         defer { plain.resetBytes(in: 0..<plain.count) }
-        let capacity = plain.count
-        let status = plain.withUnsafeMutableBytes { out in cipher.withUnsafeBytes { input in
-            key.withUnsafeBytes { key in iv.withUnsafeBytes { iv in
-                CCCrypt(CCOperation(kCCDecrypt), CCAlgorithm(kCCAlgorithmAES), CCOptions(kCCOptionPKCS7Padding),
-                        key.baseAddress, key.count, iv.baseAddress, input.baseAddress, input.count,
-                        out.baseAddress, capacity, &written)
-            } }
-        } }
-        guard status == kCCSuccess else { throw DecryptionFailure() }
-        plain.count = written
         guard let cache = try? JSONDecoder().decode(JSONValue.self, from: plain), cache.object != nil else {
             throw DecryptionFailure()
         }
@@ -168,7 +190,7 @@ enum DesktopTokenReader {
 
     /// Claude's own encryption key, which only Claude is trusted to read until the user approves Switch once.
     /// Reads are silent; only a user-requested refresh may show macOS's approval prompt.
-    private static func safeStorageKey(allowPrompt: Bool) throws -> Data {
+    static func safeStorageKey(allowPrompt: Bool) throws -> Data {
         var query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: "Claude Safe Storage", kSecAttrAccount as String: "Claude Key",
             kSecReturnData as String: true, kSecMatchLimit as String: kSecMatchLimitOne,

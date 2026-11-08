@@ -49,6 +49,12 @@ When Claude Desktop is signed in to an account that Claude Switch has not saved 
 The previous snapshot of an account is kept for one generation, so a bad save can be rolled back. A switch or sign-out that stops and restores Claude's files also puts both generations back as they were. A login whose token caches are provably empty (judged by their encrypted length, without decrypting) never replaces an existing saved login: an explicit save is refused, a switch keeps the saved login and continues, and restoring a saved login skips such copies.
 Because Claude is running while this happens, a snapshot taken this way may not be perfectly consistent across files; the switch itself saves the current account again after Claude has quit.
 
+## Moving to another Mac
+
+Settings → **Move to another Mac** writes the accounts, saved logins, quota history, follow rules and preferences to a `.switchtransfer` file protected by a password you choose (PBKDF2-HMAC-SHA256, AES-256-GCM). Anyone with the file and password can sign in to those accounts. Claude Code conversations, recovery copies and previous login generations are not included.
+
+Claude encrypts its stored secrets under a password unique to each Mac. Export re-encrypts the token caches and cookies under a random password kept inside the file, so the exporting Mac's Claude Safe Storage password never leaves it, and import re-encrypts them for the local Mac. Claude must have been opened once on the new Mac. Import writes only Switch's own vault and library: a login this Mac has already saved is kept, and an account that cannot be converted is skipped and counted. A damaged file or wrong password adds nothing. Both Macs then hold the same login, so a token refresh on one may sign the other out; signing in again fixes it.
+
 ## Switching accounts
 
 Every switch is planned first and executed only after you confirm it.

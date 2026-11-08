@@ -37,6 +37,10 @@ Any other `oauth:` key in `config.json` means the format changed; saving and swi
 
 `Cookies` is an SQLite database. Read a stable private copy together with committed WAL frames; never open the live database as immutable. A non-expired `sessionKey` cookie for host `.claude.ai` in table `cookies(host_key, name, expires_utc)` means Claude is signed in. [`LoginProbe`]
 
+### Cookie encryption
+
+`Cookies` table `cookies`, column `encrypted_value`, uses the same `v10` scheme and key as the token cache below. Values are treated as opaque bytes when moved between Macs. [`LoginTransfer`]
+
 ### Token cache encryption
 
 `oauth:tokenCacheV2` (or `oauth:tokenCache`) is base64 of `v10` + ciphertext, Chromium's macOS scheme:

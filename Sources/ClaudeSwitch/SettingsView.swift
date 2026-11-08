@@ -9,6 +9,7 @@ struct SettingsView: View {
     @AppStorage(AppTheme.preferenceKey) private var theme = AppTheme.system.rawValue
     @AppStorage(Format.showResetTimeKey) private var showResetTime = true
     @State private var recovery: String?
+    @State private var transfer: AccountTransferMode?
     @AppStorage(WorkbenchLifecycle.showInMenuBarKey) private var showInMenuBar = true
     var body: some View {
         Form {
@@ -103,6 +104,10 @@ struct SettingsView: View {
                     }
                 }
             }
+            Section(L10n.tr("Move to another Mac")) {
+                Button(L10n.tr("Export accounts…")) { transfer = .export }.disabled(!state.canTransferAccounts)
+                Button(L10n.tr("Import accounts…")) { transfer = .importing }.disabled(!state.canTransferAccounts)
+            }
             Section(L10n.tr("About")) {
                 Link(L10n.tr("Report an issue"), destination: ProjectLink.issues)
                 Button(L10n.tr("Export diagnostics…")) { Task { await state.exportDiagnostics() } }
@@ -129,6 +134,16 @@ struct SettingsView: View {
         .task { await state.notifications.refreshAccess() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             Task { await state.notifications.refreshAccess() }
+        }
+        .sheet(item: $transfer) { mode in
+            AccountTransferSheet(mode: mode) { passphrase in
+                Task {
+                    switch mode {
+                    case .export: await state.exportAccounts(passphrase: passphrase)
+                    case .importing: await state.importAccounts(passphrase: passphrase)
+                    }
+                }
+            }
         }
         .alert(L10n.tr("Recover this unfinished operation?"), isPresented: Binding(get: { recovery != nil }, set: { if !$0 { recovery = nil } })) {
             Button(L10n.tr("Cancel"), role: .cancel) { recovery = nil }

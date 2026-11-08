@@ -759,6 +759,20 @@ final class ScreenshotTests: XCTestCase {
     }
 
     /// Native segmented controls need a hosting window; ImageRenderer cannot draw their AppKit views.
+    func testAccountTransferSheets() throws {
+        guard let path = ProcessInfo.processInfo.environment["CLAUDE_SWITCH_SCREENSHOTS"] else {
+            throw XCTSkip("Set CLAUDE_SWITCH_SCREENSHOTS to render the account transfer sheets.")
+        }
+        output = URL(fileURLWithPath: path, isDirectory: true)
+        try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+        NSApplication.shared.setActivationPolicy(.accessory)
+        for language in ["en", "de"] {
+            UserDefaults.standard.register(defaults: [L10n.preferenceKey: language])
+            try save(captureSheet(AccountTransferSheet(mode: .export) { _ in }), "account-transfer-export-\(language)", maxWidth: 800)
+            try save(captureSheet(AccountTransferSheet(mode: .importing) { _ in }), "account-transfer-import-\(language)", maxWidth: 800)
+        }
+    }
+
     private func captureSheet<Content: View>(_ content: Content, dark: Bool = false) throws -> NSImage {
         let view = NSHostingView(rootView: content.environment(\.locale, L10n.locale)
             .environment(\.controlActiveState, .key).environment(\.colorScheme, dark ? .dark : .light))

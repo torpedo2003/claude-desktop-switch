@@ -6,6 +6,10 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- Export accounts, saved logins, quota history and preferences to a password-protected file, and import them on another Mac from Settings.
+
 ### Fixed
 
 - Conversations whose working folder is reached through a symbolic link no longer stop an account switch.

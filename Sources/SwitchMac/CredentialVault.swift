@@ -36,6 +36,14 @@ public actor CredentialVault: AccountVault {
         guard UUID(uuidString: accountID) != nil else { return false }
         return FileManager.default.fileExists(atPath: root.appendingPathComponent(accountID + ".switchvault").path)
     }
+    func accountIDs() throws -> [String] {
+        guard FileManager.default.fileExists(atPath: root.path) else { return [] }
+        return try FileManager.default.contentsOfDirectory(atPath: root.path).compactMap { name in
+            guard name.hasSuffix(".switchvault") else { return nil }
+            let id = String(name.dropLast(".switchvault".count))
+            return UUID(uuidString: id) == nil ? nil : id
+        }.sorted()
+    }
     private func key(create: Bool, allowPrompt: Bool = false) throws -> SymmetricKey {
         let data = try access.read(allowPrompt: allowPrompt) { allowed in
             let data = try loadKey(allowed, create)
