@@ -90,6 +90,7 @@ final class AppState {
     var newAccountFollowError: String?
     var preparingNewAccountFollowUp = false
     var exportingDiagnostics = false
+    var transferringAccounts = false
     @ObservationIgnored var presentWorkbench: (() -> Void)?
     var search = ""
     var selectedSessionIDs = Set<String>()
@@ -119,11 +120,11 @@ final class AppState {
     var openingCodeTask = false
     private let tokens: TokenScanner
     private let vault: CredentialVault
-    private let engine: SwitchEngine
+    let engine: SwitchEngine
     private let usageClient: ActiveUsageClient
     @ObservationIgnored private var started = false
     @ObservationIgnored private var loggingStarted = false
-    private var libraryReadable = true
+    var libraryReadable = true
     @ObservationIgnored private var polling: Task<Void, Never>?
     @ObservationIgnored private var credentialObserver: DesktopUsageObserver?
     @ObservationIgnored private var observedLoginSignature: String?

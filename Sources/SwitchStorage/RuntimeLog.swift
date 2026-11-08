@@ -50,7 +50,7 @@ public actor RuntimeLog {
     public enum Event: String, Codable, Sendable {
         case appStarted, appStopped, operationStarted, operationCompleted, failed, fileSinkFailed, rollbackStarted, rollbackCompleted, rollbackFailed
         case validationFailed, bindingReused, phaseStarted, exportStarted, exportCompleted, recoveryStarted, recoveryCompleted
-        case loginSaveSkipped, vaultRestoreFailed
+        case loginSaveSkipped, vaultRestoreFailed, importStarted, importCompleted
     }
     public enum Source: String, Codable, Sendable { case conversationPresentation, conversationHistory, levelDBSnapshot }
     public enum Check: String, Codable, Sendable { case format, sessionIdentity, historyBinding, filePath, fileDigest, representation }

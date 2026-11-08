@@ -6,6 +6,10 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- Export accounts, saved logins, quota history and preferences to a password-protected file, and import them on another Mac from Settings.
+
 ## [0.2.7] - 2026-11-08
 
 Saved logins stay usable after a server-side sign-out or a failed switch, plus exportable diagnostics.
