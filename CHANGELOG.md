@@ -6,6 +6,10 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.2.7] - 2026-11-08
+
+Saved logins stay usable after a server-side sign-out or a failed switch, plus exportable diagnostics.
+
 ### Added
 
 - Standardized local runtime logs with operation correlation, bounded automatic rotation and diagnostic export from Settings or a failed-operation notice.
@@ -156,7 +160,8 @@ First public release.
 - Links to the project on GitHub from the sidebar, the menu bar panel and Settings. There are no remote or automatic updates yet; new versions are published as GitHub releases.
 - `switch-inspect`, a read-only command-line diagnostic that prints counts only.
 
-[Unreleased]: https://github.com/torpedo2003/claude-desktop-switch/compare/v0.2.6...HEAD
+[Unreleased]: https://github.com/torpedo2003/claude-desktop-switch/compare/v0.2.7...HEAD
+[0.2.7]: https://github.com/torpedo2003/claude-desktop-switch/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/torpedo2003/claude-desktop-switch/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/torpedo2003/claude-desktop-switch/compare/v0.2.2...v0.2.5
 [0.2.2]: https://github.com/torpedo2003/claude-desktop-switch/compare/v0.2.0...v0.2.2
