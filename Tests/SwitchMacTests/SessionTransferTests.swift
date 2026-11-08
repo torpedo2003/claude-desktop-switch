@@ -240,6 +240,30 @@ final class SessionTransferTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: f.destination), f.destinationData)
     }
 
+    func testWorkingDirectoriesReachedThroughLinksAreAccepted() throws {
+        let fm = FileManager.default
+        let base = URL(fileURLWithPath: fm.currentDirectoryPath).appendingPathComponent(".build/transfer-fixtures/links-\(UUID().uuidString)")
+        addTeardownBlock { try? fm.removeItem(at: base) }
+        try fm.createDirectory(at: base.appendingPathComponent("real/project"), withIntermediateDirectories: true)
+        try fm.createSymbolicLink(at: base.appendingPathComponent("link"), withDestinationURL: base.appendingPathComponent("real"))
+        try fm.createSymbolicLink(at: base.appendingPathComponent("broken"), withDestinationURL: base.appendingPathComponent("missing"))
+        let linked = base.appendingPathComponent("link/project").path, broken = base.appendingPathComponent("broken/project").path
+        let added = base.appendingPathComponent("link").path
+        let f = try fixture(sourceFields: ["cwd": linked, "worktreePath": broken,
+            "sessionPermissionUpdates": [["type": "addDirectories", "directories": [added]]]])
+
+        let retained = try ConversationResources.retained(sessions: [f.session], environment: f.env)
+        XCTAssertEqual(retained.folders[linked], true)
+        XCTAssertEqual(retained.folders[added], true)
+        XCTAssertEqual(retained.folders[broken], false, "A dead link is an unavailable folder, not a reason to stop")
+        XCTAssertNoThrow(try ConversationResources.validate(retained))
+
+        try fm.removeItem(at: base.appendingPathComponent("real/project"))
+        XCTAssertThrowsError(try ConversationResources.validate(retained)) { error in
+            guard case SwitchError.changed = error else { return XCTFail("Expected a changed-folder stop") }
+        }
+    }
+
     func testInvalidResumeIdentityOrWorkingDirectoryStillBlocksTransfer() throws {
         for fields: [String: Any] in [["sessionId": "different"], ["cliSessionId": "different"], ["cwd": true]] {
             let f = try fixture(sourceFields: fields)

@@ -194,7 +194,7 @@ enum ConversationResources {
             directories += granted
             for path in Set(directories) {
                 guard path.hasPrefix("/"), !path.contains("\0") else { throw SwitchError.unsafePath }
-                let url = URL(fileURLWithPath: path); try SafeFiles.validateAncestors(url)
+                // Only the folder's existence is checked; nothing is read or written through these paths, so links are fine.
                 var directory: ObjCBool = false
                 let available = FileManager.default.fileExists(atPath: path, isDirectory: &directory) && directory.boolValue
                 if expectedFolders?[path] == true, !available { throw SwitchError.changed }
@@ -243,7 +243,6 @@ enum ConversationResources {
     static func validate(_ snapshots: Retained) throws {
         for (path, expected) in snapshots.files where try ConversationHistory.fingerprint(URL(fileURLWithPath: path)) != expected { throw SwitchError.changed }
         for (path, available) in snapshots.folders where available {
-            let url = URL(fileURLWithPath: path); try SafeFiles.validateAncestors(url)
             var directory: ObjCBool = false
             guard FileManager.default.fileExists(atPath: path, isDirectory: &directory), directory.boolValue else { throw SwitchError.changed }
         }

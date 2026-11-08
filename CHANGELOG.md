@@ -6,6 +6,10 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+
+- Conversations whose working folder is reached through a symbolic link no longer stop an account switch.
+
 ## [0.2.7] - 2026-11-08
 
 Saved logins stay usable after a server-side sign-out or a failed switch, plus exportable diagnostics.
