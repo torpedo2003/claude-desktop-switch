@@ -45,7 +45,8 @@ final class OperationDiagnosticsTests: XCTestCase {
         let path = try ConversationPresentation.relative(session, target: Account(id: source, organizationID: org))
         let file = try SafeFiles.child(path, of: environment.desktop)
         try SafeFiles.privateDirectory(file.deletingLastPathComponent())
-        try SafeFiles.atomicWrite(JSONEncoder().encode(stored), to: file)
+        let encoded = try JSONEncoder().encode(stored)
+        try SafeFiles.atomicWrite(encoded, to: file)
         let plan = OperationPlan(kind: .switchAccount, sourceAccountID: source, targetAccountID: destination,
             configDigest: "fixture", steps: [], conversationIDs: [session.id], warnings: [])
         let transaction = try FileTransaction(parent: environment.root.appendingPathComponent("transactions"), live: environment.desktop, plan: plan)
@@ -66,6 +67,6 @@ final class OperationDiagnosticsTests: XCTestCase {
         let targetPath = try ConversationPresentation.relative(session, target: target)
         XCTAssertThrowsError(try ConversationPresentation.changes(sessions: [session], sources: [:], target: target,
             environment: environment, expectations: ["presentation:" + targetPath: .absent]))
-        XCTAssertEqual(try SafeFiles.read(file), try JSONEncoder().encode(stored))
+        XCTAssertEqual(try SafeFiles.read(file), encoded)
     }
 }
