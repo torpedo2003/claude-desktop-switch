@@ -16,6 +16,8 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Account switching can reuse a display snapshot with an outdated CLI binding when its complete contents belong to the same stable conversation and contain no references to the previous engine.
 - Account switching no longer reports that Claude helpers are still running when only Electron's crash reporter remains.
 - Quitting Claude no longer makes idle Code conversations appear recently active or preselects them for an account switch.
+- A login whose token caches are empty, as after a server-side sign-out, no longer replaces an account's saved login when saving or switching away.
+- A switch or sign-out that stops and restores Claude's files also leaves the account's saved login and its previous generation as they were.
 
 ## [0.2.6] - 2026-10-26
 
@@ -154,10 +156,10 @@ First public release.
 - Links to the project on GitHub from the sidebar, the menu bar panel and Settings. There are no remote or automatic updates yet; new versions are published as GitHub releases.
 - `switch-inspect`, a read-only command-line diagnostic that prints counts only.
 
-[Unreleased]: https://github.com/uiuing/claude-desktop-switch/compare/v0.2.6...HEAD
-[0.2.6]: https://github.com/uiuing/claude-desktop-switch/compare/v0.2.5...v0.2.6
-[0.2.5]: https://github.com/uiuing/claude-desktop-switch/compare/v0.2.2...v0.2.5
-[0.2.2]: https://github.com/uiuing/claude-desktop-switch/compare/v0.2.0...v0.2.2
-[0.2.0]: https://github.com/uiuing/claude-desktop-switch/compare/v0.1.5...v0.2.0
-[0.1.5]: https://github.com/uiuing/claude-desktop-switch/compare/v0.1.0...v0.1.5
-[0.1.0]: https://github.com/uiuing/claude-desktop-switch/releases/tag/v0.1.0
+[Unreleased]: https://github.com/torpedo2003/claude-desktop-switch/compare/v0.2.6...HEAD
+[0.2.6]: https://github.com/torpedo2003/claude-desktop-switch/compare/v0.2.5...v0.2.6
+[0.2.5]: https://github.com/torpedo2003/claude-desktop-switch/compare/v0.2.2...v0.2.5
+[0.2.2]: https://github.com/torpedo2003/claude-desktop-switch/compare/v0.2.0...v0.2.2
+[0.2.0]: https://github.com/torpedo2003/claude-desktop-switch/compare/v0.1.5...v0.2.0
+[0.1.5]: https://github.com/torpedo2003/claude-desktop-switch/compare/v0.1.0...v0.1.5
+[0.1.0]: https://github.com/torpedo2003/claude-desktop-switch/releases/tag/v0.1.0

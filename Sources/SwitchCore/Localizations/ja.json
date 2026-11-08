@@ -479,5 +479,6 @@
   "Export diagnostics…": "診断情報を書き出す…",
   "Runtime logs": "実行ログ",
   "Could not export diagnostics.": "診断情報を書き出せませんでした。",
-  "Runtime logs are unavailable. Check disk space and permissions.": "実行ログを書き込めません。ディスク容量とアクセス権を確認してください。"
+  "Runtime logs are unavailable. Check disk space and permissions.": "実行ログを書き込めません。ディスク容量とアクセス権を確認してください。",
+  "Claude has no sign-in tokens right now, so the saved login was kept.": "Claude に現在ログイントークンがないため、保存済みのログイン情報を残しました。"
 }

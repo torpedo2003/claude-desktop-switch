@@ -479,5 +479,6 @@
   "Export diagnostics…": "진단 정보 내보내기…",
   "Runtime logs": "실행 로그",
   "Could not export diagnostics.": "진단 정보를 내보낼 수 없습니다.",
-  "Runtime logs are unavailable. Check disk space and permissions.": "실행 로그를 쓸 수 없습니다. 디스크 공간과 권한을 확인하세요."
+  "Runtime logs are unavailable. Check disk space and permissions.": "실행 로그를 쓸 수 없습니다. 디스크 공간과 권한을 확인하세요.",
+  "Claude has no sign-in tokens right now, so the saved login was kept.": "Claude에 현재 로그인 토큰이 없어 저장된 로그인 정보를 유지했습니다."
 }

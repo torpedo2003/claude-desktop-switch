@@ -479,5 +479,6 @@
   "Export diagnostics…": "Exporter le diagnostic…",
   "Runtime logs": "Journaux",
   "Could not export diagnostics.": "Impossible d’exporter le diagnostic.",
-  "Runtime logs are unavailable. Check disk space and permissions.": "Impossible d’écrire les journaux. Vérifiez l’espace disque et les autorisations."
+  "Runtime logs are unavailable. Check disk space and permissions.": "Impossible d’écrire les journaux. Vérifiez l’espace disque et les autorisations.",
+  "Claude has no sign-in tokens right now, so the saved login was kept.": "Claude n’a pas de jetons de connexion pour l’instant ; la connexion enregistrée est conservée."
 }

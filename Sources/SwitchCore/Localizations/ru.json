@@ -479,5 +479,6 @@
   "Export diagnostics…": "Экспорт диагностики…",
   "Runtime logs": "Журналы",
   "Could not export diagnostics.": "Не удалось экспортировать диагностику.",
-  "Runtime logs are unavailable. Check disk space and permissions.": "Не удалось записать журналы. Проверьте место на диске и права доступа."
+  "Runtime logs are unavailable. Check disk space and permissions.": "Не удалось записать журналы. Проверьте место на диске и права доступа.",
+  "Claude has no sign-in tokens right now, so the saved login was kept.": "Сейчас в Claude нет токенов входа, поэтому сохранённые данные входа оставлены как есть."
 }

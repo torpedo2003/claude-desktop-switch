@@ -109,6 +109,19 @@ public enum IdentitySchema {
         let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
         return digest(try encoder.encode(JSONValue.object(auth)))
     }
+    /// True when every token cache present is provably empty, judged by length alone without decrypting.
+    /// A cache is `v10` + AES-128-CBC ciphertext; one block holds at most 15 plaintext bytes, too short
+    /// for any entry, whose key alone contains `https://api.anthropic.com`. Unknown formats return false.
+    public static func tokenCachesKnownEmpty(_ config: JSONValue) -> Bool {
+        let caches = ["oauth:tokenCache", "oauth:tokenCacheV2"].compactMap { config[$0].string }
+        guard !caches.isEmpty else { return false }
+        return caches.allSatisfy { value in
+            if value.isEmpty { return true }
+            guard let data = Data(base64Encoded: value), data.count > 3, data.prefix(3) == Data("v10".utf8) else { return false }
+            let cipher = data.count - 3
+            return cipher > 0 && cipher % 16 == 0 && cipher <= 16
+        }
+    }
     public static func validateConfig(_ value: JSONValue) throws {
         guard let keys = value.object?.keys,
               value["lastKnownAccountUuid"].string.flatMap(UUID.init(uuidString:)) != nil,

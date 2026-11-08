@@ -479,5 +479,6 @@
   "Export diagnostics…": "匯出診斷資訊…",
   "Runtime logs": "執行日誌",
   "Could not export diagnostics.": "無法匯出診斷資訊。",
-  "Runtime logs are unavailable. Check disk space and permissions.": "無法寫入執行日誌，請檢查磁碟空間與權限。"
+  "Runtime logs are unavailable. Check disk space and permissions.": "無法寫入執行日誌，請檢查磁碟空間與權限。",
+  "Claude has no sign-in tokens right now, so the saved login was kept.": "Claude 目前沒有登入權杖，已保留先前儲存的登入資訊。"
 }

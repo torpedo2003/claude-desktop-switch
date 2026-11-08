@@ -479,5 +479,6 @@
   "Export diagnostics…": "Exportar diagnóstico…",
   "Runtime logs": "Logs",
   "Could not export diagnostics.": "Não foi possível exportar o diagnóstico.",
-  "Runtime logs are unavailable. Check disk space and permissions.": "Não foi possível gravar os logs. Verifique o espaço em disco e as permissões."
+  "Runtime logs are unavailable. Check disk space and permissions.": "Não foi possível gravar os logs. Verifique o espaço em disco e as permissões.",
+  "Claude has no sign-in tokens right now, so the saved login was kept.": "O Claude está sem tokens de login agora; o login salvo foi mantido."
 }

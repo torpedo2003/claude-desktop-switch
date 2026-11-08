@@ -103,6 +103,27 @@ public actor CredentialVault: AccountVault {
         }
         try SafeFiles.atomicWrite(data, to: target)
     }
+    /// The sealed bytes of an account's saved login and its previous generation, as they are on disk.
+    struct Generation: Sendable { var current: Data?; var previous: Data? }
+    private func generationFiles(_ accountID: String) throws -> (current: URL, previous: URL) {
+        guard UUID(uuidString: accountID) != nil else { throw SwitchError.unsafePath }
+        return (root.appendingPathComponent(accountID + ".switchvault"), root.appendingPathComponent(accountID + ".previous.switchvault"))
+    }
+    func generation(accountID: String) throws -> Generation {
+        let files = try generationFiles(accountID), fm = FileManager.default
+        func read(_ url: URL) throws -> Data? { fm.fileExists(atPath: url.path) ? try SafeFiles.read(url, limit: 192 * 1024 * 1024) : nil }
+        return Generation(current: try read(files.current), previous: try read(files.previous))
+    }
+    /// Puts both files back exactly as `generation` found them, so an operation that did not finish
+    /// does not rotate away the older saved login. The current file goes first: while restoring, the
+    /// previous file holds the only other copy of it.
+    func restore(_ generation: Generation, accountID: String) throws {
+        let files = try generationFiles(accountID), fm = FileManager.default
+        for (url, data) in [(files.current, generation.current), (files.previous, generation.previous)] {
+            if let data { try SafeFiles.privateDirectory(root); try SafeFiles.atomicWrite(data, to: url) }
+            else if fm.fileExists(atPath: url.path) { try SafeFiles.validateAncestors(url); try fm.removeItem(at: url) }
+        }
+    }
     /// Where a build that moved removed logins aside instead of deleting them left them.
     private var removedRoot: URL { root.appendingPathComponent("removed") }
     /// Deletes the saved login and its previous generation. A marker stays until `finishRemoval`,

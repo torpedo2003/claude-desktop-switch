@@ -94,6 +94,7 @@ public actor SwitchEngine: SwitchService {
         guard try currentLoginFingerprint() == before, try environment.currentAccount() == snapshot.accountID else {
             throw SwitchError.changed
         }
+        try await refuseTokenless(snapshot)
         try await vault.save(snapshot)
         return (snapshot.accountID, before)
     }
@@ -218,6 +219,7 @@ public actor SwitchEngine: SwitchService {
                   let config = try? MacEnvironment.effectiveConfig(stored: stored,
                       journal: originals.first(where: { $0.path == "config.json.journal" })?.data),
                   (try? IdentitySchema.validateConfig(config)) != nil,
+                  !IdentitySchema.tokenCachesKnownEmpty(config),
                   config["lastKnownAccountUuid"].string?.lowercased() == id else { continue }
             let files = originals.filter { file in IdentitySchema.containers.contains { file.path == $0 || file.path.hasPrefix($0 + "/") } }
             guard let cookies = files.first(where: { $0.path == "Cookies" }), LoginProbe.signedIn(cookieData: cookies.data) == true
@@ -306,6 +308,8 @@ public actor SwitchEngine: SwitchService {
             stage = .savingLogin
             await RuntimeLog.shared.record(.phaseStarted, component: .operation, stage: stage)
             let snapshot = try capture(version: version)
+            do { try await refuseTokenless(snapshot) }
+            catch { if wasRunning { try? await desktop.launch(application) }; throw error }
             try await vault.save(snapshot)
             var result = OperationResult()
             if wasRunning {
@@ -320,15 +324,33 @@ public actor SwitchEngine: SwitchService {
             if wasRunning { try? await desktop.launch(application) }
             throw SwitchError.blocked(L10n.tr("Claude is signed out. Just sign in to the account to add in Claude."))
         }
-        if swapsLogin && sourceSignedIn {
+        // What the vault held before this operation, put back if the operation does not finish.
+        var savedGeneration: (accountID: String, generation: CredentialVault.Generation)?
+        if swapsLogin && sourceSignedIn, let sourceID = plan.sourceAccountID {
             stage = .savingSourceLogin
             await RuntimeLog.shared.record(.phaseStarted, component: .operation, stage: stage)
-            do { try await vault.save(capture(version: version)) }
-            catch { if wasRunning { try? await desktop.launch(application) }; throw error }
+            do {
+                let snapshot = try capture(version: version)
+                if await isTokenlessOverSaved(snapshot) {
+                    await RuntimeLog.shared.record(.loginSaveSkipped, component: .operation, level: .warning, stage: stage)
+                } else {
+                    savedGeneration = (sourceID, try await vault.generation(accountID: sourceID))
+                    try await vault.save(snapshot)
+                }
+            } catch {
+                if let savedGeneration { await restoreVault(savedGeneration, stage: stage) }
+                if wasRunning { try? await desktop.launch(application) }
+                throw error
+            }
         }
         stage = .creatingTransaction
         await RuntimeLog.shared.record(.phaseStarted, component: .operation, stage: stage)
-        let transaction = try FileTransaction(parent: transactions, live: environment.desktop, plan: plan, claudeVersion: version)
+        let transaction: FileTransaction
+        do { transaction = try FileTransaction(parent: transactions, live: environment.desktop, plan: plan, claudeVersion: version) }
+        catch {
+            if let savedGeneration { await restoreVault(savedGeneration, stage: stage) }
+            throw error
+        }
         do {
             stage = .readingLocalStorage
             await RuntimeLog.shared.record(.phaseStarted, component: .operation, stage: stage)
@@ -438,6 +460,9 @@ public actor SwitchEngine: SwitchService {
                 throw SwitchError.blocked(L10n.tr("The operation did not finish. Use Recover in Settings before trying again."))
             }
             await RuntimeLog.shared.record(.rollbackCompleted, component: .operation, stage: stage)
+            // Claude's originals are back, so the saved login must be too. After a failed rollback the
+            // fresh save is kept: it is the latest copy of the login that Recover puts back.
+            if let savedGeneration { await restoreVault(savedGeneration, stage: stage) }
             try? await transaction.archive(vault: vault)
             // Every original is back in place, so the previous login is safe to reopen.
             if wasRunning, (try? await desktop.launch(application)) != nil {
@@ -490,6 +515,23 @@ public actor SwitchEngine: SwitchService {
         try await transaction.rollback { try await desktop.assertStopped() }
         try await transaction.archive(vault: vault)
         prune(now: Date())
+    }
+
+    /// A login whose token caches are provably empty cannot sign in; it must not replace a saved one.
+    func isTokenlessOverSaved(_ snapshot: LoginSnapshot) async -> Bool {
+        guard IdentitySchema.tokenCachesKnownEmpty(.object(snapshot.auth)) else { return false }
+        return await vault.contains(accountID: snapshot.accountID)
+    }
+    private func refuseTokenless(_ snapshot: LoginSnapshot) async throws {
+        guard await isTokenlessOverSaved(snapshot) else { return }
+        await RuntimeLog.shared.record(.loginSaveSkipped, component: .storage, level: .warning, stage: .savingLogin)
+        throw SwitchError.blocked(L10n.tr("Claude has no sign-in tokens right now, so the saved login was kept."))
+    }
+    private func restoreVault(_ saved: (accountID: String, generation: CredentialVault.Generation), stage: RuntimeLog.Stage) async {
+        do { try await vault.restore(saved.generation, accountID: saved.accountID) }
+        catch {
+            await RuntimeLog.shared.record(.vaultRestoreFailed, component: .storage, level: .warning, stage: stage, failure: RuntimeFailure(error))
+        }
     }
 
     func capture(version: String) throws -> LoginSnapshot {

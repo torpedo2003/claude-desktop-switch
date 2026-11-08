@@ -479,5 +479,6 @@
   "Export diagnostics…": "Diagnose exportieren…",
   "Runtime logs": "Protokolle",
   "Could not export diagnostics.": "Die Diagnose konnte nicht exportiert werden.",
-  "Runtime logs are unavailable. Check disk space and permissions.": "Protokolle können nicht geschrieben werden. Prüfe Speicherplatz und Zugriffsrechte."
+  "Runtime logs are unavailable. Check disk space and permissions.": "Protokolle können nicht geschrieben werden. Prüfe Speicherplatz und Zugriffsrechte.",
+  "Claude has no sign-in tokens right now, so the saved login was kept.": "Claude hat gerade keine Anmelde-Tokens; die gespeicherten Anmeldedaten wurden behalten."
 }
