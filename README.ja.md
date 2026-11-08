@@ -8,7 +8,7 @@
 
 Claude Desktop のアカウントと残りの使用量を、Mac のメニューバーに。切り替えるときは、続けたい Code セッションも一緒に。
 
-[![最新リリース](https://img.shields.io/badge/Download-latest_release-C9653F?style=flat-square)](https://github.com/uiuing/claude-desktop-switch/releases/latest)
+[![最新リリース](https://img.shields.io/badge/Download-latest_release-C9653F?style=flat-square)](https://github.com/torpedo2003/claude-desktop-switch/releases/latest)
 ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-111?style=flat-square&logo=apple)
 [![License: MIT](https://img.shields.io/badge/license-MIT-3B82F6?style=flat-square)](LICENSE)
 
@@ -79,7 +79,7 @@ Claude Desktop のアカウントと残りの使用量を、Mac のメニュー�
 
 **動作環境**：macOS 14 Sonoma 以降（Apple シリコン／Intel）、[Claude Desktop](https://claude.ai/download) がインストール済みであること。
 
-1. [最新リリース](https://github.com/uiuing/claude-desktop-switch/releases/latest) から `ClaudeSwitch-<バージョン>-macOS.zip` をダウンロードします。
+1. [最新リリース](https://github.com/torpedo2003/claude-desktop-switch/releases/latest) から `ClaudeSwitch-<バージョン>-macOS.zip` をダウンロードします。
 2. 解凍して **Claude Switch** を「アプリケーション」フォルダに移動します。
 3. 起動します。まだ Apple の公証を受けていないため、初回のみ次の操作が必要です。
    - macOS 15 以降：**システム設定 → プライバシーとセキュリティ** を開き、下にスクロールして **このまま開く** をクリックします。
@@ -95,7 +95,7 @@ Claude Desktop のアカウントと残りの使用量を、Mac のメニュー�
 
 ### アップデート
 
-**設定 → アップデート** で新しいバージョンを確認したり、自動確認を無効にしたりできます。**最新バージョンを見る** から [ダウンロードページ](https://github.com/uiuing/claude-desktop-switch/releases/latest) を開き、手動でインストールしてください。
+**設定 → アップデート** で新しいバージョンを確認したり、自動確認を無効にしたりできます。**最新バージョンを見る** から [ダウンロードページ](https://github.com/torpedo2003/claude-desktop-switch/releases/latest) を開き、手動でインストールしてください。
 
 「アプリケーション」内の旧版を置き換える前に Claude Switch を終了します。起動時に許可を求められたら **アクセスを許可** を選び、macOS のダイアログで確認してください。**常に許可** を選ぶと、繰り返しの確認を減らせます。
 
@@ -154,7 +154,7 @@ Claude Desktop のアカウントと残りの使用量を、Mac のメニュー�
 <details>
 <summary><b>Claude Desktop のアップデートで動かなくなりませんか？</b></summary>
 
-Claude Desktop の更新に合わせて、Claude Switch の更新が必要になる場合があります。切り替えが動かなくなったら新しいリリースを確認するか、[Issue を報告](https://github.com/uiuing/claude-desktop-switch/issues/new/choose)してください。
+Claude Desktop の更新に合わせて、Claude Switch の更新が必要になる場合があります。切り替えが動かなくなったら新しいリリースを確認するか、[Issue を報告](https://github.com/torpedo2003/claude-desktop-switch/issues/new/choose)してください。
 </details>
 
 ## ソースからビルド
@@ -162,7 +162,7 @@ Claude Desktop の更新に合わせて、Claude Switch の更新が必要にな
 Xcode 16 以降（Swift 6 ツールチェーン）が必要です。
 
 ```sh
-git clone https://github.com/uiuing/claude-desktop-switch.git
+git clone https://github.com/torpedo2003/claude-desktop-switch.git
 cd claude-desktop-switch
 swift test                               # ユニットテスト
 zsh scripts/build.sh                     # "dist/Claude Switch.app" を作成

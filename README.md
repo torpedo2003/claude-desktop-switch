@@ -8,7 +8,7 @@
 
 Your Claude Desktop accounts and remaining quota, together in your Mac’s menu bar. Bring your Code conversations along when you switch.
 
-[![Latest release](https://img.shields.io/badge/Download-latest_release-C9653F?style=flat-square)](https://github.com/uiuing/claude-desktop-switch/releases/latest)
+[![Latest release](https://img.shields.io/badge/Download-latest_release-C9653F?style=flat-square)](https://github.com/torpedo2003/claude-desktop-switch/releases/latest)
 ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-111?style=flat-square&logo=apple)
 [![License: MIT](https://img.shields.io/badge/license-MIT-3B82F6?style=flat-square)](LICENSE)
 
@@ -79,7 +79,7 @@ Pick conversations in the switch confirmation. Recent work is preselected, and y
 
 **Requirements:** macOS 14 Sonoma or later (Apple silicon or Intel) and [Claude Desktop](https://claude.ai/download).
 
-1. Download `ClaudeSwitch-<version>-macOS.zip` from the [latest release](https://github.com/uiuing/claude-desktop-switch/releases/latest).
+1. Download `ClaudeSwitch-<version>-macOS.zip` from the [latest release](https://github.com/torpedo2003/claude-desktop-switch/releases/latest).
 2. Unzip it and move **Claude Switch** to your Applications folder.
 3. Open it. The app is not notarized by Apple yet, so the first launch needs one extra step:
    - macOS 15 and later: open **System Settings → Privacy & Security**, scroll down and click **Open Anyway**.
@@ -95,7 +95,7 @@ Each release lists a SHA-256 checksum next to the download if you want to verify
 
 ### Updates
 
-Use **Settings → Updates** to check for a new version or turn automatic checks off. **View latest version** opens the [download page](https://github.com/uiuing/claude-desktop-switch/releases/latest). Download and installation are manual.
+Use **Settings → Updates** to check for a new version or turn automatic checks off. **View latest version** opens the [download page](https://github.com/torpedo2003/claude-desktop-switch/releases/latest). Download and installation are manual.
 
 Quit Claude Switch before replacing it in Applications. If asked on launch, choose **Allow access** and approve the macOS prompts. **Always Allow** helps avoid repeated prompts.
 
@@ -154,7 +154,7 @@ Sign in to each account on the new Mac to save it again. A full transfer with ma
 <details>
 <summary><b>Will a Claude Desktop update break it?</b></summary>
 
-Occasionally, a Claude Desktop update may require an update to Claude Switch too. Check for a newer release, or [report an issue](https://github.com/uiuing/claude-desktop-switch/issues/new/choose) if switching stops working.
+Occasionally, a Claude Desktop update may require an update to Claude Switch too. Check for a newer release, or [report an issue](https://github.com/torpedo2003/claude-desktop-switch/issues/new/choose) if switching stops working.
 </details>
 
 ## Build from source
@@ -162,7 +162,7 @@ Occasionally, a Claude Desktop update may require an update to Claude Switch too
 You need Xcode 16 or later (Swift 6 toolchain).
 
 ```sh
-git clone https://github.com/uiuing/claude-desktop-switch.git
+git clone https://github.com/torpedo2003/claude-desktop-switch.git
 cd claude-desktop-switch
 swift test                               # unit tests
 zsh scripts/build.sh                     # builds "dist/Claude Switch.app"

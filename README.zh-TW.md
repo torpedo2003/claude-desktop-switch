@@ -8,7 +8,7 @@
 
 常用的 Claude Desktop 帳號與剩餘額度，都在 Mac 選單列裡。切換帳號時，也能帶上需要繼續的 Code 對話。
 
-[![最新版本](https://img.shields.io/badge/Download-latest_release-C9653F?style=flat-square)](https://github.com/uiuing/claude-desktop-switch/releases/latest)
+[![最新版本](https://img.shields.io/badge/Download-latest_release-C9653F?style=flat-square)](https://github.com/torpedo2003/claude-desktop-switch/releases/latest)
 ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-111?style=flat-square&logo=apple)
 [![License: MIT](https://img.shields.io/badge/license-MIT-3B82F6?style=flat-square)](LICENSE)
 
@@ -79,7 +79,7 @@
 
 **系統需求**：macOS 14 Sonoma 或更新版本（Apple 晶片或 Intel 皆可），並已安裝 [Claude Desktop](https://claude.ai/download)。
 
-1. 從 [最新版本](https://github.com/uiuing/claude-desktop-switch/releases/latest) 下載 `ClaudeSwitch-<版本>-macOS.zip`。
+1. 從 [最新版本](https://github.com/torpedo2003/claude-desktop-switch/releases/latest) 下載 `ClaudeSwitch-<版本>-macOS.zip`。
 2. 解壓縮後把 **Claude Switch** 拖到「應用程式」資料夾。
 3. 開啟它。App 尚未經過 Apple 公證，第一次開啟需要多一個步驟：
    - macOS 15 及以上：開啟 **系統設定 → 隱私權與安全性**，往下捲動，按 **強制打開**。
@@ -95,7 +95,7 @@
 
 ### 更新
 
-在 **設定 → 版本更新** 檢查新版本，或關閉自動檢查。按 **查看最新版本** 前往 [下載頁](https://github.com/uiuing/claude-desktop-switch/releases/latest)，下載與安裝由你手動完成。
+在 **設定 → 版本更新** 檢查新版本，或關閉自動檢查。按 **查看最新版本** 前往 [下載頁](https://github.com/torpedo2003/claude-desktop-switch/releases/latest)，下載與安裝由你手動完成。
 
 取代「應用程式」中的舊版前，請先結束 Claude Switch。啟動時若出現授權提示，按 **允許存取**，再確認 macOS 對話框。選擇 **永遠允許** 可減少重複詢問。
 
@@ -154,7 +154,7 @@ Claude Switch 需要這項權限來顯示帳號額度，另一項權限用於保
 <details>
 <summary><b>Claude Desktop 更新後會不會失效？</b></summary>
 
-Claude Desktop 更新後，偶爾也需要同步更新 Claude Switch。如果無法切換，請先檢查新版，或 [提交 Issue](https://github.com/uiuing/claude-desktop-switch/issues/new/choose)。
+Claude Desktop 更新後，偶爾也需要同步更新 Claude Switch。如果無法切換，請先檢查新版，或 [提交 Issue](https://github.com/torpedo2003/claude-desktop-switch/issues/new/choose)。
 </details>
 
 ## 從原始碼建置
@@ -162,7 +162,7 @@ Claude Desktop 更新後，偶爾也需要同步更新 Claude Switch。如果無
 需要 Xcode 16 或更新版本（Swift 6 工具鏈）。
 
 ```sh
-git clone https://github.com/uiuing/claude-desktop-switch.git
+git clone https://github.com/torpedo2003/claude-desktop-switch.git
 cd claude-desktop-switch
 swift test                               # 單元測試
 zsh scripts/build.sh                     # 產生 "dist/Claude Switch.app"

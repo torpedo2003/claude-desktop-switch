@@ -3,19 +3,19 @@ import SwitchCore
 @testable import SwitchMac
 
 final class GitHubReleaseClientTests: XCTestCase {
-    private let endpoint = URL(string: "https://github.com/uiuing/claude-desktop-switch/releases/latest")!
+    private let endpoint = URL(string: "https://github.com/torpedo2003/claude-desktop-switch/releases/latest")!
     private func response(_ location: String?, status: Int = 302) -> HTTPURLResponse {
         HTTPURLResponse(url: endpoint, statusCode: status, httpVersion: nil,
                         headerFields: location.map { ["Location": $0] } ?? [:])!
     }
     func testStableReleaseVersionsCompareNumerically() throws {
-        let latest = try GitHubReleaseClient.parse(response("/uiuing/claude-desktop-switch/releases/tag/v0.1.10"), endpoint: endpoint)
+        let latest = try GitHubReleaseClient.parse(response("/torpedo2003/claude-desktop-switch/releases/tag/v0.1.10"), endpoint: endpoint)
         XCTAssertTrue(latest > ReleaseVersion("0.1.9")!)
         XCTAssertTrue(ReleaseVersion("1.0.0")! > ReleaseVersion("0.99.99")!)
         XCTAssertEqual(ReleaseVersion("v0.1.5"), ReleaseVersion("0.1.5"))
     }
     func testLatestRedirectMustStayOnThisProjectsStableReleasePage() throws {
-        let target = "https://github.com/uiuing/claude-desktop-switch/releases/tag/"
+        let target = "https://github.com/torpedo2003/claude-desktop-switch/releases/tag/"
         XCTAssertEqual(try GitHubReleaseClient.parse(response(target + "v0.1.5"), endpoint: endpoint), ReleaseVersion("0.1.5"))
         for location in ["https://github.com/fixture/other/releases/tag/v0.1.5", "https://invalid.test/releases/tag/v0.1.5",
                          target.replacingOccurrences(of: "https:", with: "http:") + "v0.1.5", target + "v0.1.5?download=true",
