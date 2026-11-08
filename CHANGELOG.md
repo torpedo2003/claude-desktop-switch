@@ -6,6 +6,10 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.2.8] - 2026-11-08
+
+Move your accounts to another Mac, and switch accounts with conversations in linked folders.
+
 ### Added
 
 - Export accounts, saved logins, quota history and preferences to a password-protected file, and import them on another Mac from Settings.
@@ -168,7 +172,8 @@ First public release.
 - Links to the project on GitHub from the sidebar, the menu bar panel and Settings. There are no remote or automatic updates yet; new versions are published as GitHub releases.
 - `switch-inspect`, a read-only command-line diagnostic that prints counts only.
 
-[Unreleased]: https://github.com/torpedo2003/claude-desktop-switch/compare/v0.2.7...HEAD
+[Unreleased]: https://github.com/torpedo2003/claude-desktop-switch/compare/v0.2.8...HEAD
+[0.2.8]: https://github.com/torpedo2003/claude-desktop-switch/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/torpedo2003/claude-desktop-switch/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/torpedo2003/claude-desktop-switch/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/torpedo2003/claude-desktop-switch/compare/v0.2.2...v0.2.5
