@@ -6,6 +6,10 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+
+- Settings and account changes made in quick succession are always saved in order.
+
 ## [0.2.8] - 2026-11-08
 
 Move your accounts to another Mac, and switch accounts with conversations in linked folders.
