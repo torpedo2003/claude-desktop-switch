@@ -1,0 +1,5 @@
+module CWinSQLite [system] {
+    header "shim.h"
+    link "winsqlite3"
+    export *
+}

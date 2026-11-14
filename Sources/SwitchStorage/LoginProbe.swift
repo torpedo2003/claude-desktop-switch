@@ -1,5 +1,9 @@
 import Foundation
+#if canImport(SQLite3)
 import SQLite3
+#elseif os(Windows)
+import CWinSQLite
+#endif
 import SwitchCore
 
 /// Local cookie evidence only. Absence is not proof of server-side revocation.
@@ -26,14 +30,14 @@ public enum LoginProbe {
 
         public mutating func signedIn(cookies url: URL, now: Date = Date()) -> Bool? {
             do {
-                let signature = try LoginProbe.cookieFiles(url).map(LoginProbe.stamp)
+                let signature = try LoginProbe.cookieFiles(url).map(SafeFiles.stamp)
                 if let entry, entry.url == url, entry.signature == signature,
                    now >= entry.observedAt, now.timeIntervalSince(entry.observedAt) < 60,
                    entry.observation.validUntil.map({ now < $0 }) ?? true {
                     return entry.observation.signedIn
                 }
                 entry = nil
-                guard let observation = probe(url, now), try LoginProbe.cookieFiles(url).map(LoginProbe.stamp) == signature else { return nil }
+                guard let observation = probe(url, now), try LoginProbe.cookieFiles(url).map(SafeFiles.stamp) == signature else { return nil }
                 entry = Entry(url: url, signature: signature, observedAt: now, observation: observation)
                 return observation.signedIn
             } catch { entry = nil; return nil }
@@ -43,7 +47,7 @@ public enum LoginProbe {
     /// Metadata only: polling never copies or queries the cookie database unless a rescan is needed.
     public static func publicationSignature(desktop: URL) -> [FileStamp?] {
         ["config.json", "config.json.journal", "Cookies", "Cookies-wal", "Cookies-journal"].map {
-            try? stamp(desktop.appendingPathComponent($0))
+            try? SafeFiles.stamp(desktop.appendingPathComponent($0))
         }
     }
 
@@ -57,16 +61,16 @@ public enum LoginProbe {
             try SafeFiles.validateAncestors(url)
             guard FileManager.default.fileExists(atPath: url.path) else { return Observation(signedIn: false) }
             let urls = cookieFiles(url)
-            let before = try urls.map(stamp)
+            let before = try urls.map(SafeFiles.stamp)
             var data: [Data?] = []
             for (file, version) in zip(urls, before) {
                 data.append(version == nil ? nil : try SafeFiles.read(file, limit: 32 * 1024 * 1024))
             }
-            guard try urls.map(stamp) == before, let database = data[0] else { return nil }
+            guard try urls.map(SafeFiles.stamp) == before, let database = data[0] else { return nil }
             // A hot rollback journal requires recovery; the owner must finish it.
             if let journal = data[2], journal.prefix(8).contains(where: { $0 != 0 }) { return nil }
             let result = observation(cookieData: database, walData: data[1], now: now)
-            guard try urls.map(stamp) == before else { return nil }
+            guard try urls.map(SafeFiles.stamp) == before else { return nil }
             return result
         } catch { return nil }
     }
@@ -75,24 +79,13 @@ public enum LoginProbe {
         [url, URL(fileURLWithPath: url.path + "-wal"), URL(fileURLWithPath: url.path + "-journal")]
     }
 
-    private static func stamp(_ url: URL) throws -> FileStamp? {
-        try SafeFiles.validateAncestors(url)
-        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
-        let handle = FileHandle(fileDescriptor: try SafeFiles.openRead(url), closeOnDealloc: true)
-        defer { try? handle.close() }
-        return try SafeFiles.stamp(handle.fileDescriptor)
-    }
-
     public static func signedIn(cookieData: Data, walData: Data? = nil, now: Date = Date()) -> Bool? {
         observation(cookieData: cookieData, walData: walData, now: now)?.signedIn
     }
 
     private static func observation(cookieData: Data, walData: Data?, now: Date) -> Observation? {
         guard cookieData.count <= 32 * 1024 * 1024, (walData?.count ?? 0) <= 32 * 1024 * 1024 else { return nil }
-        // macOS standardizes /private/var back to the /var symlink. Use an exclusive OS temporary directory.
-        var template = Array(FileManager.default.temporaryDirectory.appendingPathComponent("switch-probe-XXXXXX").path.utf8CString)
-        guard mkdtemp(&template) != nil else { return nil }
-        let folder = URL(fileURLWithPath: String(cString: template))
+        guard let folder = try? SafeFiles.temporaryDirectory(prefix: "switch-probe") else { return nil }
         defer { try? FileManager.default.removeItem(at: folder) }
         do {
             let file = folder.appendingPathComponent("Cookies")
@@ -105,9 +98,7 @@ public enum LoginProbe {
     }
 
     private static func writeCopy(_ data: Data, to url: URL) throws {
-        let fd = open(url.path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600)
-        guard fd >= 0 else { throw SwitchError.unsafePath }
-        let handle = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
+        let handle = FileHandle(fileDescriptor: try SafeFiles.createExclusive(url), closeOnDealloc: true)
         defer { try? handle.close() }
         try handle.write(contentsOf: data)
     }
@@ -115,7 +106,7 @@ public enum LoginProbe {
     private static func query(_ url: URL, now: Date) -> Observation? {
         var db: OpaquePointer?
         defer { sqlite3_close(db) }
-        guard sqlite3_open_v2(url.path, &db, SQLITE_OPEN_READONLY | SQLITE_OPEN_NOMUTEX, nil) == SQLITE_OK else { return nil }
+        guard sqlite3_open_v2(url.withUnsafeFileSystemRepresentation { String(cString: $0!) }, &db, SQLITE_OPEN_READONLY | SQLITE_OPEN_NOMUTEX, nil) == SQLITE_OK else { return nil }
         sqlite3_busy_timeout(db, 100)
         var statement: OpaquePointer?
         defer { sqlite3_finalize(statement) }

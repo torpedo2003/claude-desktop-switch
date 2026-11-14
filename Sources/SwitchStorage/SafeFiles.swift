@@ -2,7 +2,7 @@ import Foundation
 import SwitchCore
 #if canImport(Darwin)
 import Darwin
-#else
+#elseif canImport(Glibc)
 import Glibc
 #endif
 
@@ -13,7 +13,67 @@ public struct FileStamp: Codable, Equatable, Sendable {
     public var nanoseconds: Int64
 }
 
+/// The only place this module calls the system file API. The primitives below have a Win32 counterpart in
+/// `SafeFilesWindows.swift`; everything else is shared.
 public enum SafeFiles {
+    public static func read(_ url: URL, limit: Int = 8 * 1024 * 1024) throws -> Data {
+        let fd = try openRead(url)
+        let handle = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
+        defer { try? handle.close() }
+        let before = try stamp(fd)
+        guard before.size >= 0, before.size <= limit else { throw SwitchError.blocked(L10n.tr("The file exceeds the read limit and was skipped.")) }
+        let data = try handle.read(upToCount: limit + 1) ?? Data()
+        guard data.count <= limit, try stamp(fd) == before else { throw SwitchError.changed }
+        return data
+    }
+
+    public static func json(_ url: URL, limit: Int = 8 * 1024 * 1024) throws -> JSONValue {
+        try JSONDecoder().decode(JSONValue.self, from: read(url, limit: limit))
+    }
+
+    /// The identity, size and modification time of a file, or nil when it does not exist.
+    public static func stamp(_ url: URL) throws -> FileStamp? {
+        try validateAncestors(url)
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        let fd = try openRead(url)
+        let handle = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
+        defer { try? handle.close() }
+        return try stamp(fd)
+    }
+
+    public static func children(_ url: URL) throws -> [URL] {
+        try validateAncestors(url)
+        return try FileManager.default.contentsOfDirectory(at: url,
+            includingPropertiesForKeys: [.isSymbolicLinkKey, .isDirectoryKey], options: [.skipsHiddenFiles])
+            .filter { (try? $0.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) == false }
+    }
+
+    /// Integrity inventories include hidden entries and reject links instead of silently skipping them.
+    public static func strictChildren(_ url: URL) throws -> [URL] {
+        try validateAncestors(url)
+        let entries = try FileManager.default.contentsOfDirectory(at: url,
+            includingPropertiesForKeys: [.isSymbolicLinkKey, .isDirectoryKey, .isRegularFileKey], options: [])
+        for entry in entries {
+            let attributes = try entry.resourceValues(forKeys: [.isSymbolicLinkKey, .isDirectoryKey, .isRegularFileKey])
+            guard attributes.isSymbolicLink != true, attributes.isDirectory == true || attributes.isRegularFile == true else {
+                throw SwitchError.unsafePath
+            }
+        }
+        return entries
+    }
+
+    public static func child(_ relative: String, of root: URL) throws -> URL {
+        let parts = relative.split(separator: "/", omittingEmptySubsequences: false)
+        guard !relative.isEmpty, !relative.hasPrefix("/"), !relative.contains("\\"),
+              !parts.contains(where: { $0 == ".." || $0 == "." || $0.isEmpty }) else { throw SwitchError.unsafePath }
+        let url = root.appendingPathComponent(relative)
+        try validateAncestors(url)
+        return url
+    }
+}
+
+#if !os(Windows)
+extension SafeFiles {
     /// Walk every component with openat. A symlinked ancestor must not redirect a read or a write.
     public static func openRead(_ url: URL) throws -> Int32 {
         guard url.isFileURL, url.path.hasPrefix("/"), !url.pathComponents.contains("..") else { throw SwitchError.unsafePath }
@@ -46,42 +106,6 @@ public enum SafeFiles {
                          nanoseconds: Int64(t.tv_nsec))
     }
 
-    public static func read(_ url: URL, limit: Int = 8 * 1024 * 1024) throws -> Data {
-        let fd = try openRead(url)
-        let handle = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
-        defer { try? handle.close() }
-        let before = try stamp(fd)
-        guard before.size >= 0, before.size <= limit else { throw SwitchError.blocked(L10n.tr("The file exceeds the read limit and was skipped.")) }
-        let data = try handle.read(upToCount: limit + 1) ?? Data()
-        guard data.count <= limit, try stamp(fd) == before else { throw SwitchError.changed }
-        return data
-    }
-
-    public static func json(_ url: URL, limit: Int = 8 * 1024 * 1024) throws -> JSONValue {
-        try JSONDecoder().decode(JSONValue.self, from: read(url, limit: limit))
-    }
-
-    public static func children(_ url: URL) throws -> [URL] {
-        try validateAncestors(url)
-        return try FileManager.default.contentsOfDirectory(at: url,
-            includingPropertiesForKeys: [.isSymbolicLinkKey, .isDirectoryKey], options: [.skipsHiddenFiles])
-            .filter { (try? $0.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) == false }
-    }
-
-    /// Integrity inventories include hidden entries and reject links instead of silently skipping them.
-    public static func strictChildren(_ url: URL) throws -> [URL] {
-        try validateAncestors(url)
-        let entries = try FileManager.default.contentsOfDirectory(at: url,
-            includingPropertiesForKeys: [.isSymbolicLinkKey, .isDirectoryKey, .isRegularFileKey], options: [])
-        for entry in entries {
-            let attributes = try entry.resourceValues(forKeys: [.isSymbolicLinkKey, .isDirectoryKey, .isRegularFileKey])
-            guard attributes.isSymbolicLink != true, attributes.isDirectory == true || attributes.isRegularFile == true else {
-                throw SwitchError.unsafePath
-            }
-        }
-        return entries
-    }
-
     public static func validateAncestors(_ url: URL) throws {
         var path = URL(fileURLWithPath: "/", isDirectory: true)
         for c in url.standardizedFileURL.pathComponents where c != "/" {
@@ -95,21 +119,35 @@ public enum SafeFiles {
         }
     }
 
-    public static func child(_ relative: String, of root: URL) throws -> URL {
-        let parts = relative.split(separator: "/", omittingEmptySubsequences: false)
-        guard !relative.isEmpty, !relative.hasPrefix("/"), !relative.contains("\\"),
-              !parts.contains(where: { $0 == ".." || $0 == "." || $0.isEmpty }) else { throw SwitchError.unsafePath }
-        let url = root.appendingPathComponent(relative)
-        try validateAncestors(url)
-        return url
-    }
-
     public static func privateDirectory(_ url: URL) throws {
         try validateAncestors(url)
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true,
                                                attributes: [.posixPermissions: 0o700])
         try validateAncestors(url)
         try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: url.path)
+    }
+
+    /// A new owner-only file. An existing name, including a link, is refused.
+    public static func createExclusive(_ url: URL) throws -> Int32 {
+        let fd = open(url.path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600)
+        guard fd >= 0 else { throw SwitchError.unsafePath }
+        return fd
+    }
+
+    /// An owner-only file every write appends to, created when missing. A link is refused.
+    public static func openAppend(_ url: URL) throws -> Int32 {
+        let fd = open(url.path, O_WRONLY | O_APPEND | O_CREAT | O_NOFOLLOW | O_CLOEXEC, 0o600)
+        guard fd >= 0 else { throw SwitchError.unsafePath }
+        guard fchmod(fd, 0o600) == 0 else { close(fd); throw SwitchError.unsafePath }
+        return fd
+    }
+
+    /// A new owner-only folder under the system temporary directory. macOS standardizes /private/var back to
+    /// the /var symlink, so the result is used as returned and never re-validated.
+    public static func temporaryDirectory(prefix: String) throws -> URL {
+        var template = Array(FileManager.default.temporaryDirectory.appendingPathComponent(prefix + "-XXXXXX").path.utf8CString)
+        guard mkdtemp(&template) != nil else { throw SwitchError.unsafePath }
+        return URL(fileURLWithPath: String(cString: template))
     }
 
     public static func atomicWrite(_ data: Data, to url: URL) throws {
@@ -127,11 +165,7 @@ public enum SafeFiles {
         try data.withUnsafeBytes { buffer in
             var offset = 0
             while offset < buffer.count {
-                #if canImport(Darwin)
-                let n = Darwin.write(fd, buffer.baseAddress!.advanced(by: offset), buffer.count - offset)
-                #else
-                let n = Glibc.write(fd, buffer.baseAddress!.advanced(by: offset), buffer.count - offset)
-                #endif
+                let n = write(fd, buffer.baseAddress!.advanced(by: offset), buffer.count - offset)
                 if n < 0 && errno == EINTR { continue }
                 guard n > 0 else { throw SwitchError.blocked(L10n.tr("The write did not finish. The original file is preserved.")) }
                 offset += n
@@ -143,6 +177,7 @@ public enum SafeFiles {
         installed = true
         guard fsync(dir) == 0 else { throw SwitchError.blocked(L10n.tr("Could not persist the directory. Check the disk.")) }
     }
+
     public static func syncDirectory(_ url: URL) throws {
         try validateAncestors(url)
         let fd = open(url.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
@@ -151,3 +186,4 @@ public enum SafeFiles {
         guard fsync(fd) == 0 else { throw SwitchError.blocked(L10n.tr("Could not persist the directory. Recovery data is preserved.")) }
     }
 }
+#endif
