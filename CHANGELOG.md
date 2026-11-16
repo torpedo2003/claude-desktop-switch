@@ -6,6 +6,10 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.2.9] - 2026-11-16
+
+Switch accounts again when a forked conversation inherited subagent histories from its original session.
+
 ### Fixed
 
 - Settings and account changes made in quick succession are always saved in order.
@@ -177,7 +181,8 @@ First public release.
 - Links to the project on GitHub from the sidebar, the menu bar panel and Settings. There are no remote or automatic updates yet; new versions are published as GitHub releases.
 - `switch-inspect`, a read-only command-line diagnostic that prints counts only.
 
-[Unreleased]: https://github.com/torpedo2003/claude-desktop-switch/compare/v0.2.8...HEAD
+[Unreleased]: https://github.com/torpedo2003/claude-desktop-switch/compare/v0.2.9...HEAD
+[0.2.9]: https://github.com/torpedo2003/claude-desktop-switch/compare/v0.2.8...v0.2.9
 [0.2.8]: https://github.com/torpedo2003/claude-desktop-switch/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/torpedo2003/claude-desktop-switch/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/torpedo2003/claude-desktop-switch/compare/v0.2.5...v0.2.6
