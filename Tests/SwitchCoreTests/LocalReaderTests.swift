@@ -1,5 +1,9 @@
 import XCTest
+#if canImport(SQLite3)
 import SQLite3
+#elseif os(Windows)
+import CWinSQLite
+#endif
 import SwitchCore
 @testable import SwitchStorage
 

@@ -70,7 +70,7 @@ public enum L10n {
 
     static func interpolate(_ template: String, arguments: [String]) -> String {
         let expression = try! NSRegularExpression(pattern: #"\{(\d+)\}"#)
-        let source = template as NSString
+        let source = NSString(string: template)
         var result = "", cursor = 0
         for match in expression.matches(in: template, range: NSRange(location: 0, length: source.length)) {
             result += source.substring(with: NSRange(location: cursor, length: match.range.location - cursor))

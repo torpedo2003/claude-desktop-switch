@@ -70,6 +70,110 @@ final class ConversationHistoryTests: XCTestCase {
         XCTAssertThrowsError(try ConversationHistory.dependencies(history, project: project, cli: current, priorSessionIDs: [previous]))
     }
 
+    func testInheritedAgentsResolveOnlyThroughTheirAncestorProjectAndPinSidecars() throws {
+        let root = try project(), project = root.appendingPathComponent("fork"), parent = root.appendingPathComponent("parent")
+        let history = project.appendingPathComponent(current + ".jsonl"), agent = parent.appendingPathComponent("agent-fixture.jsonl")
+        let child = parent.appendingPathComponent(previous + "/subagents/agent-child.jsonl")
+        let metadata = agent.deletingPathExtension().appendingPathExtension("meta.json")
+        try write("{\"type\":\"user\",\"sessionId\":\"\(previous)\",\"toolUseResult\":{\"agentId\":\"fixture\"}}", at: history)
+        try write(#"{"type":"user","toolUseResult":{"agentId":"child"}}"#, at: agent)
+        try write(#"{"type":"assistant","message":{"content":"complete inherited output"}}"#, at: child)
+        try write(#"{"toolUseId":"fixture-tool"}"#, at: metadata)
+        let scope = ConversationHistory.Scope(project: parent, cli: previous, priorSessionIDs: [])
+        let result = try ConversationHistory.dependencies(history, project: project, cli: current, priorSessionIDs: [], inheritedScopes: [scope])
+        XCTAssertEqual(result.agentHistories, 2)
+        XCTAssertEqual(result.inheritedAgentHistories, 2)
+        XCTAssertEqual(result.historicalAgentHistories, 0)
+        XCTAssertEqual(Set(result.files.keys), Set([history, agent, child, metadata].map(\.path)))
+        try ConversationResources.validate(.init(files: result.files))
+        try write(#"{"toolUseId":"changed-tool"}"#, at: metadata)
+        XCTAssertThrowsError(try ConversationResources.validate(.init(files: result.files)))
+    }
+
+    func testInheritedAgentsRequireConsistentOriginalSessionProvenance() throws {
+        let root = try project(), project = root.appendingPathComponent("fork"), parent = root.appendingPathComponent("parent")
+        let history = project.appendingPathComponent(current + ".jsonl")
+        try write("{}", at: parent.appendingPathComponent("agent-fixture.jsonl"))
+        let scope = ConversationHistory.Scope(project: parent, cli: previous, priorSessionIDs: [])
+        for origin in [nil, current, unrelated, "../outside"] as [String?] {
+            let binding = origin.map { ",\"sessionId\":\"\($0)\"" } ?? ""
+            try write("{\"type\":\"user\"\(binding),\"toolUseResult\":{\"agentId\":\"fixture\"}}", at: history)
+            XCTAssertThrowsError(try ConversationHistory.dependencies(history, project: project, cli: current, priorSessionIDs: [], inheritedScopes: [scope]))
+        }
+        let inherited = "{\"type\":\"user\",\"sessionId\":\"\(previous)\",\"toolUseResult\":{\"agentId\":\"fixture\"}}"
+        try write(inherited + "\n" + #"{"type":"user","toolUseResult":{"agentId":"fixture"}}"#, at: history)
+        XCTAssertThrowsError(try ConversationHistory.dependencies(history, project: project, cli: current, priorSessionIDs: [], inheritedScopes: [scope]))
+    }
+
+    func testAmbiguousAncestorCopiesAndUnsafeHistoriesRemainBlocked() throws {
+        let root = try project(), project = root.appendingPathComponent("fork"), parent = root.appendingPathComponent("parent")
+        let other = root.appendingPathComponent("other"), history = project.appendingPathComponent(current + ".jsonl")
+        try write("{\"type\":\"user\",\"sessionId\":\"\(previous)\",\"toolUseResult\":{\"agentId\":\"fixture\"}}", at: history)
+        let agent = parent.appendingPathComponent("agent-fixture.jsonl"), copy = other.appendingPathComponent("agent-fixture.jsonl")
+        try write("{}", at: agent); try write("{}", at: copy)
+        let scopes = [ConversationHistory.Scope(project: parent, cli: previous, priorSessionIDs: []),
+                      ConversationHistory.Scope(project: other, cli: unrelated, priorSessionIDs: [previous])]
+        XCTAssertThrowsError(try ConversationHistory.dependencies(history, project: project, cli: current, priorSessionIDs: [], inheritedScopes: scopes))
+        try FileManager.default.removeItem(at: agent)
+        try FileManager.default.createSymbolicLink(at: agent, withDestinationURL: copy)
+        XCTAssertThrowsError(try ConversationHistory.dependencies(history, project: project, cli: current, priorSessionIDs: [], inheritedScopes: [scopes[0]]))
+    }
+
+    func testAncestorDependenciesCannotBorrowHistoriesBackFromDescendants() throws {
+        let root = try project(), project = root.appendingPathComponent("fork"), parent = root.appendingPathComponent("parent")
+        let history = project.appendingPathComponent(current + ".jsonl")
+        try write("{\"type\":\"user\",\"sessionId\":\"\(previous)\",\"toolUseResult\":{\"agentId\":\"fixture\"}}", at: history)
+        try write("{\"type\":\"user\",\"sessionId\":\"\(current)\",\"toolUseResult\":{\"agentId\":\"child\"}}", at: parent.appendingPathComponent("agent-fixture.jsonl"))
+        try write("{}", at: project.appendingPathComponent("agent-child.jsonl"))
+        let scope = ConversationHistory.Scope(project: parent, cli: previous, priorSessionIDs: [])
+        XCTAssertThrowsError(try ConversationHistory.dependencies(history, project: project, cli: current, priorSessionIDs: [], inheritedScopes: [scope]))
+    }
+
+    func testCopiedRowsResolveThroughTheirOriginalSessionOutsideTheConversationTree() throws {
+        let root = try project(), project = root.appendingPathComponent("fork"), origin = root.appendingPathComponent("origin")
+        let history = project.appendingPathComponent(current + ".jsonl"), source = origin.appendingPathComponent(previous + ".jsonl")
+        let agent = origin.appendingPathComponent("agent-fixture.jsonl")
+        let child = origin.appendingPathComponent(previous + "/subagents/agent-child.jsonl")
+        let metadata = agent.deletingPathExtension().appendingPathExtension("meta.json")
+        let row = "{\"type\":\"user\",\"sessionId\":\"\(previous)\",\"toolUseResult\":{\"agentId\":\"fixture\"}}"
+        try write(row, at: history); try write(row, at: source)
+        try write("{\"type\":\"user\",\"sessionId\":\"\(previous)\",\"toolUseResult\":{\"agentId\":\"child\"}}", at: agent)
+        try write(#"{"type":"assistant","message":{"content":"complete original output"}}"#, at: child)
+        try write(#"{"toolUseId":"fixture-tool"}"#, at: metadata)
+        XCTAssertThrowsError(try ConversationHistory.dependencies(history, project: project, cli: current, priorSessionIDs: []))
+        let result = try ConversationHistory.dependencies(history, project: project, cli: current, priorSessionIDs: [], projects: [project, origin])
+        XCTAssertEqual(result.agentHistories, 2)
+        XCTAssertEqual(result.inheritedAgentHistories, 2)
+        XCTAssertEqual(result.historicalAgentHistories, 0)
+        XCTAssertEqual(Set(result.files.keys), Set([history, agent, child, metadata].map(\.path)))
+        try ConversationResources.validate(.init(files: result.files))
+        try write(#"{"toolUseId":"changed-tool"}"#, at: metadata)
+        XCTAssertThrowsError(try ConversationResources.validate(.init(files: result.files)))
+    }
+
+    func testOriginalSessionBindingRequiresOneTranscriptThatRecordsTheAgent() throws {
+        let root = try project(), project = root.appendingPathComponent("fork"), origin = root.appendingPathComponent("origin")
+        let other = root.appendingPathComponent("other"), history = project.appendingPathComponent(current + ".jsonl")
+        let source = origin.appendingPathComponent(previous + ".jsonl"), copy = other.appendingPathComponent(previous + ".jsonl")
+        let agent = origin.appendingPathComponent("agent-fixture.jsonl")
+        let row = "{\"type\":\"user\",\"sessionId\":\"\(previous)\",\"toolUseResult\":{\"agentId\":\"fixture\"}}"
+        try write(row, at: history); try write("{}", at: agent); try SafeFiles.privateDirectory(other)
+        func resolve() throws -> Int {
+            try ConversationHistory.dependencies(history, project: project, cli: current, priorSessionIDs: [],
+                                                 projects: [project, origin, other]).agentHistories
+        }
+        XCTAssertThrowsError(try resolve())
+        try write(#"{"type":"user","message":{"content":"unrelated work"}}"#, at: source)
+        XCTAssertThrowsError(try resolve())
+        try write(row, at: source)
+        XCTAssertEqual(try resolve(), 1)
+        try write(row, at: copy)
+        XCTAssertThrowsError(try resolve())
+        try FileManager.default.removeItem(at: copy)
+        try FileManager.default.removeItem(at: agent)
+        XCTAssertThrowsError(try resolve())
+    }
+
     func testSharedHistoryStreamsBeyondTheAttachmentBudgetAndDetectsMutation() throws {
         let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent(".build/history-fixtures/\(UUID())")
         try SafeFiles.privateDirectory(root)

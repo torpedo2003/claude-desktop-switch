@@ -5,8 +5,21 @@ import SwitchStorage
 
 /// Shared histories are checked in place. Their size must not be limited by the attachment-copy budget.
 enum ConversationHistory {
-    static func scan(_ file: URL) throws -> (digest: String, agents: Set<String>) {
-        var pending = Data(), agents = Set<String>()
+    struct Scope {
+        var project: URL
+        var cli: String
+        var priorSessionIDs: [String]
+        var record: JSONValue = .object([:])
+        var owners: Set<String> { Set([cli] + priorSessionIDs) }
+    }
+    struct Scan {
+        var digest: String
+        var agents: Set<String>
+        var referenceSessions: [String: Set<String?>]
+    }
+
+    static func scan(_ file: URL) throws -> Scan {
+        var pending = Data(), agents = Set<String>(), referenceSessions: [String: Set<String?>] = [:]
         func line(_ data: Data) throws {
             guard !data.isEmpty else { return }
             guard let row = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw invalid }
@@ -14,6 +27,12 @@ enum ConversationHistory {
                 guard !agent.isEmpty, agent.count <= 128,
                       agent.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "_" || $0 == "-") }) else { throw SwitchError.unsafePath }
                 agents.insert(agent)
+                if (referenceSessions[agent]?.count ?? 0) < 2 {
+                    let origin = (row["sessionId"] as? String).flatMap { id in
+                        id.count == 36 && UUID(uuidString: id) != nil ? id : nil
+                    }
+                    referenceSessions[agent, default: []].insert(origin)
+                }
                 guard agents.count <= 512 else { throw invalid }
             }
         }
@@ -26,7 +45,42 @@ enum ConversationHistory {
             }
         }
         try line(pending)
-        return (hash, agents)
+        return Scan(digest: hash, agents: agents, referenceSessions: referenceSessions)
+    }
+
+    /// Project directories that hold a CLI session's main transcript.
+    static func homes(of cli: String, in projects: [URL]) throws -> [URL] {
+        try projects.filter { project in
+            guard try project.resourceValues(forKeys: [.isDirectoryKey]).isDirectory == true else { return false }
+            let file = project.appendingPathComponent(cli + ".jsonl")
+            try SafeFiles.validateAncestors(file)
+            return FileManager.default.fileExists(atPath: file.path)
+        }
+    }
+
+    static func scope(_ session: Conversation, projects: [URL], desktop: URL) throws -> Scope {
+        guard let cli = session.cliSessionID, UUID(uuidString: cli) != nil else { throw SwitchError.unsafePath }
+        let matches = try homes(of: cli, in: projects)
+        guard matches.count == 1, let project = matches.first else {
+            throw SwitchError.blocked(L10n.tr("This conversation's local history is missing or ambiguous. Nothing was transferred."))
+        }
+        let record = try SafeFiles.json(SafeFiles.child(session.recordRelativePath, of: desktop), limit: 2 * 1024 * 1024)
+        let lineage = ConversationLineage.read(record, sessionID: session.sessionID)
+        guard record["sessionId"].string == session.sessionID, record["cliSessionId"].string == cli,
+              !lineage.invalid, lineage.parent == session.parentSessionID else { throw SwitchError.changed }
+        return Scope(project: project, cli: cli, priorSessionIDs: try priorSessionIDs(record), record: record)
+    }
+
+    static func ancestors(of session: Conversation, in tree: ConversationTree) throws -> [Conversation] {
+        guard tree.isValid(session) else { throw ConversationTree.unresolved }
+        let family = Dictionary(grouping: tree.members(of: session), by: { $0.sessionID.lowercased() })
+        var result: [Conversation] = [], current = session, seen: Set<String> = [session.id]
+        while let parent = current.parentSessionID {
+            guard let matches = family[parent.lowercased()], matches.count == 1, let next = matches.first,
+                  seen.insert(next.id).inserted, seen.count <= 128 else { throw ConversationTree.unresolved }
+            result.append(next); current = next
+        }
+        return result
     }
 
     static func priorSessionIDs(_ record: JSONValue) throws -> [String] {
@@ -39,42 +93,81 @@ enum ConversationHistory {
         })).sorted()
     }
 
-    /// Rewinds can retain agent transcripts under a recorded previous CLI session.
-    /// Resolve only that conversation's declared history, never unrelated project sessions.
-    static func dependencies(_ history: URL, project: URL, cli: String, priorSessionIDs: [String]) throws
-        -> (files: [String: FileExpectation], agentHistories: Int, historicalAgentHistories: Int) {
-        let owners = Set([cli] + priorSessionIDs)
-        var pending = [(history, cli)], seen = Set<URL>(), files: [String: FileExpectation] = [:], historical = 0
-        while let (file, owner) = pending.popLast() {
+    static func dependencies(_ history: URL, project: URL, cli: String, priorSessionIDs: [String],
+                             inheritedScopes: [Scope] = [], projects: [URL] = []) throws
+        -> (files: [String: FileExpectation], agentHistories: Int, historicalAgentHistories: Int, inheritedAgentHistories: Int) {
+        var scopes = [Scope(project: project, cli: cli, priorSessionIDs: priorSessionIDs)] + inheritedScopes
+        var pending = [(history, cli, 0)], seen = Set<URL>(), files: [String: FileExpectation] = [:], historical = 0, inherited = 0
+        var bound: [String: Int] = [:], recorded: [String: Set<String>] = [:]
+        /// A copied row keeps naming the session that wrote it, which may be absent from Desktop's index.
+        /// That session's project can supply the history only when its transcript is unique and records the agent.
+        func binding(_ origin: String, agent: String) throws -> Int? {
+            if bound[origin] == nil {
+                let homes = try homes(of: origin, in: projects)
+                guard homes.count == 1, let home = homes.first else { return nil }
+                recorded[origin] = try scan(home.appendingPathComponent(origin + ".jsonl")).agents
+                scopes.append(Scope(project: home, cli: origin, priorSessionIDs: []))
+                bound[origin] = scopes.count - 1
+            }
+            return recorded[origin]?.contains(agent) == true ? bound[origin] : nil
+        }
+        func candidate(_ name: String, owner: String, scope: Scope) throws -> (URL, String)? {
+            let nested = try SafeFiles.child(owner + "/subagents/" + name, of: scope.project)
+            let flat = try SafeFiles.child(name, of: scope.project)
+            if FileManager.default.fileExists(atPath: nested.path) { return (nested, owner) }
+            if FileManager.default.fileExists(atPath: flat.path) { return (flat, owner) }
+            let alternatives = try scope.owners.subtracting([owner]).sorted().compactMap { id -> (URL, String)? in
+                let file = try SafeFiles.child(id + "/subagents/" + name, of: scope.project)
+                return FileManager.default.fileExists(atPath: file.path) ? (file, id) : nil
+            }
+            guard alternatives.count <= 1 else { throw missingAgent }
+            return alternatives.first
+        }
+        while let (file, owner, scopeIndex) = pending.popLast() {
             guard seen.insert(file).inserted else { continue }
             guard seen.count <= 513 else { throw invalid }
             let scan = try scan(file)
             files[file.path] = .sha256(scan.digest)
             if file != history {
-                if owner != cli { historical += 1 }
+                if scopeIndex > 0 { inherited += 1 }
+                else if owner != cli { historical += 1 }
                 let metadata = file.deletingPathExtension().appendingPathExtension("meta.json")
                 if FileManager.default.fileExists(atPath: metadata.path) { files[metadata.path] = try fingerprint(metadata) }
             }
             for agent in scan.agents {
                 let name = "agent-" + agent + ".jsonl"
-                let nested = try SafeFiles.child(owner + "/subagents/" + name, of: project)
-                let flat = try SafeFiles.child(name, of: project)
-                if FileManager.default.fileExists(atPath: nested.path) { pending.append((nested, owner)) }
-                else if FileManager.default.fileExists(atPath: flat.path) { pending.append((flat, owner)) }
-                else {
-                    let alternatives = try owners.subtracting([owner]).sorted().compactMap { id -> (URL, String)? in
-                        let candidate = try SafeFiles.child(id + "/subagents/" + name, of: project)
-                        return FileManager.default.fileExists(atPath: candidate.path) ? (candidate, id) : nil
+                if let match = try candidate(name, owner: owner, scope: scopes[scopeIndex]) {
+                    pending.append((match.0, match.1, scopeIndex))
+                } else {
+                    // Forked rows can still name agents owned by another session, possibly in another project.
+                    // Follow the row's original session binding: validated ancestors first, then that session's own transcript.
+                    let origins = scan.referenceSessions[agent] ?? []
+                    guard origins.count == 1, let origin = origins.compactMap({ $0 }).first else { throw missingAgent }
+                    var alternatives: [URL: (String, Int)] = [:]
+                    for index in scopes.indices.dropFirst().prefix(inheritedScopes.count) where index > scopeIndex {
+                        let scope = scopes[index]
+                        guard scope.owners.contains(origin) else { continue }
+                        if let match = try candidate(name, owner: origin, scope: scope) {
+                            alternatives[match.0] = alternatives[match.0] ?? (match.1, index)
+                        }
+                    }
+                    if alternatives.isEmpty, let index = try binding(origin, agent: agent),
+                       let match = try candidate(name, owner: origin, scope: scopes[index]) {
+                        alternatives[match.0] = (match.1, index)
                     }
                     guard alternatives.count == 1, let candidate = alternatives.first else {
-                        RuntimeLog.validation(.conversationHistory, check: .filePath)
-                        throw SwitchError.blocked(L10n.tr("This conversation's subagent history is missing or ambiguous. Nothing was transferred."))
+                        throw missingAgent
                     }
-                    pending.append(candidate)
+                    pending.append((candidate.key, candidate.value.0, candidate.value.1))
                 }
             }
         }
-        return (files, seen.count - 1, historical)
+        return (files, seen.count - 1, historical, inherited)
+    }
+
+    private static var missingAgent: SwitchError {
+        RuntimeLog.validation(.conversationHistory, check: .filePath)
+        return .blocked(L10n.tr("This conversation's subagent history is missing or ambiguous. Nothing was transferred."))
     }
 
     static func fingerprint(_ url: URL) throws -> FileExpectation {

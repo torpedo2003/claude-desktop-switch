@@ -1,6 +1,7 @@
 import Foundation
-import Darwin
+#if canImport(OSLog)
 import OSLog
+#endif
 import SwitchCore
 
 public enum RuntimeLogContext {
@@ -96,9 +97,25 @@ public actor RuntimeLog {
         var incomplete: Bool
         var events: [Entry]
     }
+    #if os(Windows)
+    public static let directory = (ProcessInfo.processInfo.environment["LOCALAPPDATA"].map { URL(fileURLWithPath: $0, isDirectory: true) }
+        ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("AppData/Local")).appendingPathComponent("Claude Switch/Logs")
+    #else
     public static let directory = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/Claude Switch")
+    #endif
     public static let shared = RuntimeLog(directory: directory)
+    #if canImport(OSLog)
     private static let system = Logger(subsystem: "dev.claudeswitch.desktop", category: "runtime")
+    #endif
+    private static func mirror(_ text: String, level: Level) {
+        #if canImport(OSLog)
+        switch level {
+        case .info: system.info("\(text, privacy: .public)")
+        case .warning: system.warning("\(text, privacy: .public)")
+        case .error: system.error("\(text, privacy: .public)")
+        }
+        #endif
+    }
     private let directory: URL
     private let maximumBytes: Int
     private let fileCount: Int
@@ -140,19 +157,16 @@ public actor RuntimeLog {
             failure: failure, source: source, line: line, check: check, detail: detail)
         guard let encoded = try? encoder().encode(entry) else { return false }
         let text = String(decoding: encoded, as: UTF8.self)
-        switch level {
-        case .info: Self.system.info("\(text, privacy: .public)")
-        case .warning: Self.system.warning("\(text, privacy: .public)")
-        case .error: Self.system.error("\(text, privacy: .public)")
-        }
+        Self.mirror(text, level: level)
         guard enabled else { return true }
         do {
             var data = encoded; data.append(10)
             guard data.count <= maximumBytes else { throw SwitchError.changed }
             try SafeFiles.privateDirectory(directory)
             if FileManager.default.fileExists(atPath: file(0).path) {
-                let handle = FileHandle(fileDescriptor: try SafeFiles.openRead(file(0)), closeOnDealloc: true)
-                let size = try SafeFiles.stamp(handle.fileDescriptor).size
+                let current = try SafeFiles.openRead(file(0))
+                let handle = FileHandle(fileDescriptor: current, closeOnDealloc: true)
+                let size = try SafeFiles.stamp(current).size
                 var partial = false
                 if size > 0 {
                     try handle.seek(toOffset: UInt64(size - 1)); partial = try handle.read(upToCount: 1) != Data([10])
@@ -162,11 +176,8 @@ public actor RuntimeLog {
             }
             let destination = file(0); try SafeFiles.validateAncestors(destination)
             let creating = !FileManager.default.fileExists(atPath: destination.path)
-            let fd = open(destination.path, O_WRONLY | O_APPEND | O_CREAT | O_NOFOLLOW | O_CLOEXEC, 0o600)
-            guard fd >= 0 else { throw SwitchError.unsafePath }
-            let handle = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
+            let handle = FileHandle(fileDescriptor: try SafeFiles.openAppend(destination), closeOnDealloc: true)
             defer { try? handle.close() }
-            guard fchmod(fd, 0o600) == 0 else { throw SwitchError.unsafePath }
             try handle.write(contentsOf: data); try handle.synchronize()
             if creating { try SafeFiles.syncDirectory(directory) }
             writeFailed = false
@@ -177,8 +188,7 @@ public actor RuntimeLog {
             failed.sequence = sequence; failed.component = .diagnostics; failed.event = .fileSinkFailed
             failed.level = .error; failed.failure = RuntimeFailure(error)
             if let data = try? encoder().encode(failed) {
-                let text = String(decoding: data, as: UTF8.self)
-                Self.system.error("\(text, privacy: .public)")
+                Self.mirror(String(decoding: data, as: UTF8.self), level: .error)
             }
             return false
         }
@@ -188,9 +198,7 @@ public actor RuntimeLog {
             let source = file(index)
             try SafeFiles.validateAncestors(source)
             guard FileManager.default.fileExists(atPath: source.path) else { continue }
-            let handle = FileHandle(fileDescriptor: try SafeFiles.openRead(source), closeOnDealloc: true)
-            let oversized = try SafeFiles.stamp(handle.fileDescriptor).size > maximumBytes
-            try handle.close()
+            let oversized = (try SafeFiles.stamp(source)?.size ?? 0) > maximumBytes
             if oversized { historyIncomplete = true }
             if index == fileCount - 1 || oversized { try FileManager.default.removeItem(at: source) }
             else {

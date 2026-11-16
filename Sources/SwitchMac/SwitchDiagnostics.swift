@@ -6,10 +6,18 @@ import SwitchStorage
 public enum SwitchDiagnostics {
     public static func inspectHistory(sessions: [Conversation], environment: MacEnvironment) -> [String: Int] {
         var counts = ["conversations": sessions.count, "verifiedConversations": 0, "agentHistories": 0,
-                      "historicalAgentHistories": 0, "missingOrAmbiguousMainHistories": 0,
+                      "historicalAgentHistories": 0, "inheritedAgentHistories": 0, "missingOrAmbiguousMainHistories": 0,
                       "changedConversations": 0, "unverifiedConversations": 0]
         do {
             let projects = try SafeFiles.strictChildren(environment.projects)
+            let tree = ConversationTree(sessions)
+            var scopes: [String: ConversationHistory.Scope] = [:]
+            func scope(_ session: Conversation) throws -> ConversationHistory.Scope {
+                if let saved = scopes[session.id] { return saved }
+                let location = try ConversationHistory.scope(session, projects: projects, desktop: environment.desktop)
+                scopes[session.id] = location
+                return location
+            }
             for session in sessions {
                 do {
                     guard let cli = session.cliSessionID, UUID(uuidString: cli) != nil else {
@@ -22,12 +30,14 @@ public enum SwitchDiagnostics {
                     guard matches.count == 1, let project = matches.first else {
                         counts["missingOrAmbiguousMainHistories", default: 0] += 1; continue
                     }
-                    let record = try SafeFiles.json(SafeFiles.child(session.recordRelativePath, of: environment.desktop), limit: 2 * 1024 * 1024)
+                    let location = try scope(session)
+                    let inherited = try ConversationHistory.ancestors(of: session, in: tree).map { try scope($0) }
                     let result = try ConversationHistory.dependencies(project.appendingPathComponent(cli + ".jsonl"),
-                        project: project, cli: cli, priorSessionIDs: ConversationHistory.priorSessionIDs(record))
+                        project: project, cli: cli, priorSessionIDs: location.priorSessionIDs, inheritedScopes: inherited, projects: projects)
                     counts["verifiedConversations", default: 0] += 1
                     counts["agentHistories", default: 0] += result.agentHistories
                     counts["historicalAgentHistories", default: 0] += result.historicalAgentHistories
+                    counts["inheritedAgentHistories", default: 0] += result.inheritedAgentHistories
                 } catch SwitchError.changed { counts["changedConversations", default: 0] += 1 }
                 catch { counts["unverifiedConversations", default: 0] += 1 }
             }

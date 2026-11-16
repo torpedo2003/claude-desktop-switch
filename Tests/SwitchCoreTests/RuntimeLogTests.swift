@@ -27,11 +27,15 @@ final class RuntimeLogTests: XCTestCase {
         XCTAssertEqual(files.count, 3)
         for file in files {
             XCTAssertLessThanOrEqual(try SafeFiles.read(file).count, 2048)
+            #if !os(Windows)
             let attributes = try FileManager.default.attributesOfItem(atPath: file.path)
             XCTAssertEqual((attributes[.posixPermissions] as? NSNumber)?.intValue, 0o600)
+            #endif
         }
+        #if !os(Windows)
         let attributes = try FileManager.default.attributesOfItem(atPath: folder.path)
         XCTAssertEqual((attributes[.posixPermissions] as? NSNumber)?.intValue, 0o700)
+        #endif
         let saved = try await report(log)
         XCTAssertFalse(saved.incomplete)
         XCTAssertFalse(saved.events.isEmpty)

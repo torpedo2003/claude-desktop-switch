@@ -6,6 +6,11 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+
+- Settings and account changes made in quick succession are always saved in order.
+- Account switches and conversation transfers can verify subagent histories that a forked conversation inherited from its original session, including sessions that Claude no longer lists and legacy flat histories.
+
 ## [0.2.8] - 2026-11-08
 
 Move your accounts to another Mac, and switch accounts with conversations in linked folders.

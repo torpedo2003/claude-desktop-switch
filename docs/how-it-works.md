@@ -97,7 +97,7 @@ Choose **Export diagnostics…** from Settings → About or a failed-operation n
 
 `swift run switch-inspect --presentation-check` checks a bounded in-memory copy of local presentation storage and conversation-owned snapshots without Keychain access, network requests or writes to Claude. It reports counts, fixed statuses and recent transaction timestamps/phases, including whether invalid saved presentation belongs to a followed conversation for a recent failed switch. Current follow rules and current local files are evidence of a reproducible blocker, not a reconstruction of a past manual selection. An invalid result does not establish damaged conversation transcripts. Encrypted saved-login storage is outside this check.
 
-`swift run switch-inspect --history-check` reads one exact conversation title from standard input and checks the matching current-account conversation tree. It prints counts only, including agent histories resolved through recorded previous CLI handles; the title, identities, paths and history contents are neither printed nor saved. It does not prepare or execute a switch, access the Keychain or make network requests.
+`swift run switch-inspect --history-check` reads one exact conversation title from standard input and checks the matching current-account conversation tree. It prints counts only, including agent histories resolved through recorded previous CLI handles and inherited histories resolved through the original session of copied rows; the title, identities, paths and history contents are neither printed nor saved. It does not prepare or execute a switch, access the Keychain or make network requests.
 
 ### Recovering an unfinished operation
 

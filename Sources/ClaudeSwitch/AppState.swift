@@ -105,6 +105,8 @@ final class AppState {
     var loginSaveError: String?
     @ObservationIgnored private var loginSaveRecovery = LoginSaveRetry()
     @ObservationIgnored private var loginSaveRetry: Task<Void, Never>?
+    @ObservationIgnored private var saveTask: Task<Void, Never>?
+    @ObservationIgnored private var saveRequested = false
     let demo: Bool
     let startupAccess: StartupAccess
     let environment = MacEnvironment()
@@ -296,7 +298,9 @@ final class AppState {
         guard !demo else { return }
         if !loggingStarted, Bundle.main.bundleIdentifier == "dev.claudeswitch.desktop" {
             loggingStarted = true
-            let buildID = Bundle.main.executableURL.flatMap { try? SafeFiles.read($0, limit: 64 * 1024 * 1024) }.map(digest) ?? "unknown"
+            let buildID = await Task.detached(priority: .utility) {
+                Bundle.main.executableURL.flatMap { try? SafeFiles.read($0, limit: 64 * 1024 * 1024) }.map(digest) ?? "unknown"
+            }.value
             let logging = await RuntimeLog.shared.start(version: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown",
                 build: Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "unknown", buildID: buildID)
             if !logging { message = L10n.tr("Runtime logs are unavailable. Check disk space and permissions.") }
@@ -517,8 +521,16 @@ final class AppState {
         updateSwitchReminder()
         if !library.preferences.showCodeTasks { codeTaskBinding.invalidate(.unavailable) }
         guard startupAccess.isReady, !demo, libraryReadable else { return }
-        let state = library
-        Task { do { try await store.save(state) } catch { message = L10n.tr("Could not save settings.") } }
+        saveRequested = true
+        guard saveTask == nil else { return }
+        // One writer at a time, always with the newest state: separate tasks could finish out of order.
+        saveTask = Task { [weak self] in
+            while let self, self.saveRequested {
+                self.saveRequested = false
+                do { try await self.store.save(self.library) } catch { self.message = L10n.tr("Could not save settings.") }
+            }
+            self?.saveTask = nil
+        }
     }
     private func updateQuotaRefreshPause() {
         quotaRefreshQueue.isPaused = !startupAccess.isReady || demo || working || refreshing || preparingManualQuota || usageRefreshingAccountID != nil ||

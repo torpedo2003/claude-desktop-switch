@@ -1,6 +1,4 @@
 import Foundation
-import Darwin
-import CryptoKit
 import SwitchCore
 
 public actor TokenScanner: TranscriptReader {
@@ -267,11 +265,11 @@ public actor TokenScanner: TranscriptReader {
         guard offset > 0 else { return "" }
         let length = min(offset, 4096)
         try handle.seek(toOffset: 0)
-        var hash = SHA256()
-        hash.update(data: try handle.read(upToCount: Int(length)) ?? Data())
+        var hash = SHA256Hex()
+        hash.update(try handle.read(upToCount: Int(length)) ?? Data())
         try handle.seek(toOffset: offset - length)
-        hash.update(data: try handle.read(upToCount: Int(length)) ?? Data())
-        return hash.finalize().map { String(format: "%02x", $0) }.joined()
+        hash.update(try handle.read(upToCount: Int(length)) ?? Data())
+        return hash.finalize()
     }
 
     private func includingTail(_ stored: Cursor) -> Cursor {
