@@ -76,6 +76,76 @@ final class ConversationIntegrityTests: XCTestCase {
         return (plan, changes, transaction)
     }
 
+    private func inheritedFixture() throws -> (Fixture, URL) {
+        let f = try fixture(), project = f.environment.projects.appendingPathComponent("fixture")
+        let nested = project.appendingPathComponent(id(20) + "/subagents/agent-fixture-agent.jsonl")
+        let flat = project.appendingPathComponent("agent-fixture-agent.jsonl")
+        try FileManager.default.moveItem(at: nested, to: flat)
+        try FileManager.default.moveItem(at: nested.deletingPathExtension().appendingPathExtension("meta.json"),
+                                        to: flat.deletingPathExtension().appendingPathExtension("meta.json"))
+        for index in 1...2 {
+            let original = project.appendingPathComponent(id(20 + index) + ".jsonl")
+            let fork = f.environment.projects.appendingPathComponent("fork-\(index)/" + id(20 + index) + ".jsonl")
+            let row = "{\"type\":\"user\",\"sessionId\":\"\(id(20))\",\"toolUseResult\":{\"agentId\":\"fixture-agent\"}}"
+            try write(Data(row.utf8), to: fork)
+            try FileManager.default.removeItem(at: original)
+        }
+        return (f, flat)
+    }
+
+    func testPreviewResolvesInheritedAgentsAcrossProjectsAndDiagnosticsUseTheSameTree() async throws {
+        let (f, agent) = try inheritedFixture(), (plan, _, _) = try await prepare(f)
+        let retained = try ConversationResources.retained(sessions: XCTUnwrap(plan.transferSessions), environment: f.environment)
+        let metadata = agent.deletingPathExtension().appendingPathExtension("meta.json")
+        XCTAssertNotNil(retained.files[agent.path])
+        XCTAssertNotNil(retained.files[metadata.path])
+        let counts = SwitchDiagnostics.inspectHistory(sessions: f.sessions, environment: f.environment)
+        XCTAssertEqual(counts["verifiedConversations"], 4)
+        XCTAssertEqual(counts["unverifiedConversations"], 0)
+        XCTAssertEqual(counts["inheritedAgentHistories"], 2)
+        for (relative, bytes) in f.originalRecords { XCTAssertEqual(try SafeFiles.read(f.environment.desktop.appendingPathComponent(relative)), bytes) }
+        try write(Data(#"{"toolUseId":"changed-tool"}"#.utf8), to: metadata)
+        XCTAssertThrowsError(try ConversationResources.validate(retained))
+    }
+
+    func testInheritedHistoryRemainsIntactThroughTransferAndRollback() async throws {
+        try XCTSkipUnless(BuildAccess.allowsClaudeWrites, "Fixture writes require CLAUDE_WRITE_ENABLED")
+        let (f, agent) = try inheritedFixture(), (plan, _, transaction) = try await prepare(f)
+        let sessions = try XCTUnwrap(plan.transferSessions)
+        let retained = try ConversationResources.retained(sessions: sessions, environment: f.environment)
+        let original = try SafeFiles.read(agent)
+        try await transaction.apply(stopped: {}, verify: { try ConversationResources.validate(retained) })
+        try MigrationBuilder.verifyDestination(sessions: sessions, target: target, environment: f.environment)
+        XCTAssertEqual(try SafeFiles.read(agent), original)
+        for relative in f.originalRecords.keys { XCTAssertFalse(FileManager.default.fileExists(atPath: f.environment.desktop.appendingPathComponent(relative).path)) }
+        try await FileTransaction(existing: transaction.root, live: f.environment.desktop).rollback { }
+        for (relative, bytes) in f.originalRecords { XCTAssertEqual(try SafeFiles.read(f.environment.desktop.appendingPathComponent(relative)), bytes) }
+        XCTAssertEqual(try SafeFiles.read(agent), original)
+        try ConversationResources.validate(retained)
+    }
+
+    func testDetachedConversationResolvesCopiedRowsOnlyThroughTheirOriginalTranscript() async throws {
+        let (f, agent) = try inheritedFixture()
+        let index = f.environment.desktop.appendingPathComponent(f.sourcePrefix + "/" + id(11) + ".json")
+        var record = try JSONSerialization.jsonObject(with: SafeFiles.read(index)) as! [String: Any]
+        record["lineageDetached"] = true
+        try write(JSONSerialization.data(withJSONObject: record), to: index)
+        let sessions = try ConversationRecords.readScope(desktop: f.environment.desktop, accountID: sourceID, organizationID: sourceOrg)
+        let detached = try XCTUnwrap(sessions.first { $0.sessionID == id(11) })
+        let plan = try await f.engine.prepare(kind: .migrate, target: target, sessions: [detached])
+        let retained = try ConversationResources.retained(sessions: XCTUnwrap(plan.transferSessions), environment: f.environment)
+        XCTAssertNotNil(retained.files[agent.path])
+        XCTAssertNotNil(retained.files[agent.deletingPathExtension().appendingPathExtension("meta.json").path])
+        try FileManager.default.removeItem(at: f.environment.projects.appendingPathComponent("fixture/" + id(20) + ".jsonl"))
+        do {
+            _ = try await f.engine.prepare(kind: .migrate, target: target, sessions: [detached])
+            XCTFail("A flat history must not be attributed without its original transcript")
+        } catch {
+            XCTAssertEqual((error as? SwitchError)?.localizedDescription,
+                           L10n.tr("This conversation's subagent history is missing or ambiguous. Nothing was transferred."))
+        }
+    }
+
     func testPreviewIncludesWholeTreeAndOpaqueCompanionsWithoutWritingLiveData() async throws {
         let f = try fixture(), (plan, changes, _) = try await prepare(f)
         XCTAssertEqual(plan.transferSessions?.count, 4)

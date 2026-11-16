@@ -166,23 +166,23 @@ enum ConversationResources {
             throw SwitchError.blocked(L10n.tr("Turn off persistent browser storage in Claude before transferring these conversations."))
         }
         let projects = try SafeFiles.strictChildren(environment.projects)
+        let tree = ConversationTree(sessions)
+        var scopes: [String: ConversationHistory.Scope] = [:]
+        func scope(_ session: Conversation) throws -> ConversationHistory.Scope {
+            if let saved = scopes[session.id] { return saved }
+            let location = try ConversationHistory.scope(session, projects: projects, desktop: environment.desktop)
+            scopes[session.id] = location
+            return location
+        }
         for session in sessions {
-            guard let cli = session.cliSessionID, UUID(uuidString: cli) != nil else { throw SwitchError.unsafePath }
-            let matches = try projects.filter { project in
-                guard try project.resourceValues(forKeys: [.isDirectoryKey]).isDirectory == true else { return false }
-                let file = project.appendingPathComponent(cli + ".jsonl")
-                try SafeFiles.validateAncestors(file)
-                return FileManager.default.fileExists(atPath: file.path)
-            }
-            guard matches.count == 1, let project = matches.first else {
-                throw SwitchError.blocked(L10n.tr("This conversation's local history is missing or ambiguous. Nothing was transferred."))
-            }
+            let location = try scope(session), cli = location.cli, project = location.project
+            let inherited = try ConversationHistory.ancestors(of: session, in: tree).map { try scope($0) }
             let transcript = project.appendingPathComponent(cli + ".jsonl")
             let companions = try SafeFiles.strictChildren(project).filter { ownedComponent($0.lastPathComponent, ids: [cli]) }
             for file in companions { result.files[file.path] = try ConversationHistory.fingerprint(file) }
-            let record = try SafeFiles.json(SafeFiles.child(session.recordRelativePath, of: environment.desktop), limit: 2 * 1024 * 1024)
+            let record = location.record
             let histories = try ConversationHistory.dependencies(transcript, project: project, cli: cli,
-                priorSessionIDs: ConversationHistory.priorSessionIDs(record))
+                priorSessionIDs: location.priorSessionIDs, inheritedScopes: inherited, projects: projects)
             result.files.merge(histories.files) { _, current in current }
             var directories = [record["cwd"].string, record["worktreePath"].string].compactMap { $0 }
             var granted = Set<String>()
